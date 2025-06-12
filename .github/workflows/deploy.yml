@@ -7,6 +7,7 @@ on:
 
 env:
   GCP_PROJECT_ID: sound-dialect-458215-j9
+  GCP_PROJECT_NUMBER: 159248096205 # O número do seu projeto
   GCP_REGION: southamerica-east1
   GCP_ARTIFACT_REPO: devops-repo
   APP_NAME: strapi-app
@@ -27,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - name: Build and Push Image
         id: build_image
@@ -50,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: "projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
