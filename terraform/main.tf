@@ -5,10 +5,10 @@ resource "google_container_cluster" "devops-cluster" {
   # We can't create a cluster with no node pool defined, but we want to only use
   # separately managed node pools. So we create the smallest possible default
   # node pool and immediately delete it.
-  remove_default_node_pool = true
-  initial_node_count       = 1
+  remove_default_node_pool  = true
+  initial_node_count        = 1
   default_max_pods_per_node = 30
-  deletion_protection = false
+  deletion_protection       = false
 }
 
 resource "google_container_node_pool" "primary_preemptible_nodes" {
@@ -23,7 +23,7 @@ resource "google_container_node_pool" "primary_preemptible_nodes" {
 
     # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
     # service_account = google_service_account.default.email
-    oauth_scopes    = [
+    oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]
   }
