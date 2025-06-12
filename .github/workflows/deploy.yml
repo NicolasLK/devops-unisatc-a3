@@ -1,0 +1,59 @@
+name: CI/CD Strapi A3
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  GCP_PROJECT_ID: sound-dialect-458215-j9
+  GCP_REGION: southamerica-east1
+  GCP_ARTIFACT_REPO: devops-repo
+  APP_NAME: strapi-app
+  GCP_SERVICE_ACCOUNT: strapi-deployer@sound-dialect-458215-j9.iam.gserviceaccount.com
+  WIF_POOL: github-pool
+  WIF_PROVIDER: github-provider
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_name: ${{ steps.build_image.outputs.image_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Build and Push Image
+        id: build_image
+        run: |
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+          IMAGE_TAG=${{ github.sha }}
+          IMAGE_NAME="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REPO }}/${{ env.APP_NAME }}:${IMAGE_TAG}"
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to GKE with Terraform
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}"
