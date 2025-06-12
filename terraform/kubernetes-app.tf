@@ -1,27 +1,25 @@
 data "google_client_config" "default" {}
 
-# 1. Solicita um "pedaço" de armazenamento persistente.
 resource "kubernetes_persistent_volume_claim" "strapi_pvc" {
   metadata {
-    name = "strapi-data-disk-claim" # Nome da solicitação de volume
+    name = "strapi-data-disk-claim"
   }
   spec {
-    access_modes = ["ReadWriteOnce"] # Pode ser lido/escrito por um pod de cada vez
+    access_modes = ["ReadWriteOnce"]
     resources {
       requests = {
-        storage = "1Gi" # Solicita 1 GB de espaço. Suficiente para o SQLite.
+        storage = "1Gi"
       }
     }
   }
 }
 
-# 2. Define o Deployment da aplicação (como rodar o contêiner)
 resource "kubernetes_deployment" "strapi" {
   metadata {
     name = "strapi-deployment"
   }
   spec {
-    replicas = 1 # IMPORTANTE: Para SQLite, use apenas 1 réplica.
+    replicas = 1
     selector {
       match_labels = {
         app = "strapi"
@@ -34,7 +32,6 @@ resource "kubernetes_deployment" "strapi" {
         }
       }
       spec {
-        # 3. Conecta o volume persistente ao Pod.
         volume {
           name = "strapi-data"
           persistent_volume_claim {
@@ -47,20 +44,17 @@ resource "kubernetes_deployment" "strapi" {
           port {
             container_port = 1337
           }
-          # 4. "Monta" o volume dentro do contêiner no local exato do banco.
           volume_mount {
             name       = "strapi-data"
-            mount_path = "/app/.tmp" # Mapeia nosso disco para a pasta do banco de dados.
+            mount_path = "/app/.tmp"
           }
         }
       }
     }
   }
-  # Garante que o volume seja criado antes do deployment tentar usá-lo
   depends_on = [kubernetes_persistent_volume_claim.strapi_pvc]
 }
 
-# 5. Expõe a aplicação para a internet com um IP público
 resource "kubernetes_service" "strapi" {
   metadata {
     name = "strapi-service"

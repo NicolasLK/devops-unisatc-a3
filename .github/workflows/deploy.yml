@@ -7,7 +7,7 @@ on:
 
 env:
   GCP_PROJECT_ID: sound-dialect-458215-j9
-  GCP_PROJECT_NUMBER: 159248096205 # O número do seu projeto
+  GCP_PROJECT_NUMBER: 159248096205
   GCP_REGION: southamerica-east1
   GCP_ARTIFACT_REPO: devops-repo
   APP_NAME: strapi-app
