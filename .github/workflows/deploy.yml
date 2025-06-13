@@ -12,7 +12,7 @@ env:
   GCP_ARTIFACT_REPO: devops-repo
   APP_NAME: strapi-app
   GCP_SERVICE_ACCOUNT: strapi-deployer@sound-dialect-458215-j9.iam.gserviceaccount.com
-  WIF_POOL: github-pool
+  WIF_POOL: github-pool-a3
   WIF_PROVIDER: github-provider
 
 jobs:
