@@ -1,11 +1,16 @@
 data "google_client_config" "default" {}
 
 resource "kubernetes_persistent_volume_claim" "strapi_pvc" {
+  wait_until_bound = true
+  timeouts {
+    create = "10m"
+  }
   metadata {
     name = "strapi-data-disk-claim"
   }
   spec {
     access_modes = ["ReadWriteOnce"]
+    storage_class_name = "standard"
     resources {
       requests = {
         storage = "1Gi"
