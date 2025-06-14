@@ -24,6 +24,8 @@ resource "kubernetes_persistent_volume_claim" "strapi_pvc" {
 }
 
 resource "kubernetes_deployment" "strapi" {
+  depends_on = [kubernetes_persistent_volume_claim.strapi_pvc]
+
   metadata {
     name = "strapi-deployment"
   }
@@ -57,11 +59,19 @@ resource "kubernetes_deployment" "strapi" {
             name       = "strapi-data"
             mount_path = "/app/.tmp"
           }
+          env {
+            name = "APP_KEYS"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.strapi_env.metadata[0].name
+                key  = "APP_KEYS"
+              }
+            }
+          }
         }
       }
     }
   }
-  depends_on = [kubernetes_persistent_volume_claim.strapi_pvc]
 }
 
 resource "kubernetes_service" "strapi" {
@@ -78,4 +88,16 @@ resource "kubernetes_service" "strapi" {
     }
     type = "LoadBalancer"
   }
+}
+
+resource "kubernetes_secret" "strapi_env" {
+  metadata {
+    name = "strapi-env"
+  }
+
+  data = {
+    APP_KEYS = base64encode(var.app_keys)
+  }
+
+  type = "Opaque"
 }
