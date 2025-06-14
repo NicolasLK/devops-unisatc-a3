@@ -58,7 +58,5 @@ jobs:
         run: terraform init
         working-directory: ./terraform
       - name: Terraform Apply
-        run: terraform apply -auto-approve \ 
-          -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}" \ 
-          -var="app_keys=${{ secrets.STRAPI_APP_KEYS }}"
+        run: terraform apply -auto-approve -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}" -var="app_keys=${{ secrets.STRAPI_APP_KEYS }}"
         working-directory: ./terraform
