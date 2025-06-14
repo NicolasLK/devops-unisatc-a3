@@ -56,5 +56,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
         run: terraform init
+        working-directory: ./terraform
       - name: Terraform Apply
         run: terraform apply -auto-approve -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}"
+        working-directory: ./terraform
