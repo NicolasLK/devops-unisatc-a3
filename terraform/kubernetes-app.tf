@@ -12,6 +12,10 @@ resource "kubernetes_persistent_volume_claim" "strapi_pvc" {
       }
     }
   }
+
+  depends_on = [
+    google_container_node_pool.primary_preemptible_nodes
+  ]
 }
 
 resource "kubernetes_deployment" "strapi" {
