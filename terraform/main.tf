@@ -27,4 +27,9 @@ resource "google_container_node_pool" "primary_preemptible_nodes" {
       "https://www.googleapis.com/auth/cloud-platform"
     ]
   }
+
+  upgrade_settings {
+    max_surge       = 1
+    max_unavailable = 0
+  }
 }
