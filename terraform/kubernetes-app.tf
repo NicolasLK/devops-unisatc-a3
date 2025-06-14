@@ -68,6 +68,42 @@ resource "kubernetes_deployment" "strapi" {
               }
             }
           }
+          env {
+            name = "API_TOKEN_SALT"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.strapi_env.metadata[0].name
+                key  = "API_TOKEN_SALT"
+              }
+            }
+          }
+          env {
+            name = "ADMIN_JWT_SECRET"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.strapi_env.metadata[0].name
+                key  = "ADMIN_JWT_SECRET"
+              }
+            }
+          }
+          env {
+            name = "TRANSFER_TOKEN_SALT"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.strapi_env.metadata[0].name
+                key  = "TRANSFER_TOKEN_SALT"
+              }
+            }
+          }
+          env {
+            name = "JWT_SECRET"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret.strapi_env.metadata[0].name
+                key  = "JWT_SECRET"
+              }
+            }
+          }
         }
       }
     }
@@ -97,6 +133,10 @@ resource "kubernetes_secret" "strapi_env" {
 
   data = {
     APP_KEYS = base64encode(var.app_keys)
+    API_TOKEN_SALT        = base64encode(var.api_token_salt)
+    ADMIN_JWT_SECRET      = base64encode(var.admin_jwt_secret)
+    TRANSFER_TOKEN_SALT   = base64encode(var.transfer_token_salt)
+    JWT_SECRET            = base64encode(var.jwt_secret)
   }
 
   type = "Opaque"
