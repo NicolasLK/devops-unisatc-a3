@@ -58,5 +58,11 @@ jobs:
         run: terraform init
         working-directory: ./terraform
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}" -var="app_keys=${{ secrets.STRAPI_APP_KEYS }}" -var="api_token_salt=${{ secrets.STRAPI_API_TOKEN_SALT }}" -var="admin_jwt_secret=${{ secrets.STRAPI_ADMIN_JWT_SECRET }}" -var="transfer_token_salt=${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}" -var="jwt_secret=${{ secrets.STRAPI_JWT_SECRET }}"
+        env:
+          TF_VAR_app_keys: ${{ secrets.STRAPI_APP_KEYS }}
+          TF_VAR_api_token_salt: ${{ secrets.secrets.STRAPI_API_TOKEN_SALT }}
+          TF_VAR_admin_jwt_secret: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
+          TF_VAR_jwt_secret: ${{ secrets.STRAPI_JWT_SECRET }}
+          TF_VAR_transfer_token_salt: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
+        run: terraform apply -auto-approve -var="strapi_image=${{ needs.build-and-push.outputs.image_name }}"
         working-directory: ./terraform
