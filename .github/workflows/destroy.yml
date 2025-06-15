@@ -32,10 +32,10 @@ jobs:
 
       - name: Terraform Destroy
         env:
-          TF_VAR_app_keys: ${{ secrets.STRAPI_APP_KEYS }}
-          TF_VAR_api_token_salt: ${{ secrets.secrets.STRAPI_API_TOKEN_SALT }}
-          TF_VAR_admin_jwt_secret: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
-          TF_VAR_jwt_secret: ${{ secrets.STRAPI_JWT_SECRET }}
-          TF_VAR_transfer_token_salt: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
+          TF_VAR_app_keys: "dummy"
+          TF_VAR_api_token_salt: "dummy"
+          TF_VAR_admin_jwt_secret: "dummy"
+          TF_VAR_jwt_secret: "dummy"
+          TF_VAR_transfer_token_salt: "dummy"
         run: terraform destroy -auto-approve -var="strapi_image=dummy"
         working-directory: ./terraform
