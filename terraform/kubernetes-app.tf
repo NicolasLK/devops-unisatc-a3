@@ -43,22 +43,22 @@ resource "kubernetes_deployment" "strapi" {
         }
       }
       spec {
-        volume {
-          name = "strapi-data"
-          persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.strapi_pvc.metadata[0].name
-          }
-        }
+        # volume {
+        #   name = "strapi-data"
+        #   persistent_volume_claim {
+        #     claim_name = kubernetes_persistent_volume_claim.strapi_pvc.metadata[0].name
+        #   }
+        # }
         container {
           image = var.strapi_image
           name  = "strapi"
           port {
             container_port = 1337
           }
-          volume_mount {
-            name       = "strapi-data"
-            mount_path = "/app/.tmp"
-          }
+          # volume_mount {
+          #   name       = "strapi-data"
+          #   mount_path = "/app/.tmp"
+          # }
           env {
             name = "APP_KEYS"
             value_from {
