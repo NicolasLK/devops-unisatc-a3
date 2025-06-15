@@ -27,7 +27,7 @@ resource "google_container_node_pool" "primary_preemptible_nodes" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
     ignore_changes = [
       node_config[0].kubelet_config,
       node_config[0].resource_labels,
