@@ -3,7 +3,7 @@
 name: Destruir Infraestrutura Terraform (Manual)
 
 on:
-  workflow_dispatch: # Permite que você inicie este workflow manualmente pelo GitHub
+  workflow_dispatch:
 
 jobs:
   destroy:
@@ -31,5 +31,5 @@ jobs:
         working-directory: ./terraform
 
       - name: Terraform Destroy
-        run: terraform destroy -auto-approve -var="strapi_image=dummy"
+        run: terraform destroy -auto-approve -var="strapi_image=dummy" -lock-timeout=15m
         working-directory: ./terraform
