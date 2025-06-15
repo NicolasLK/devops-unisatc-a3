@@ -31,5 +31,5 @@ jobs:
         working-directory: ./terraform
 
       - name: Terraform Destroy
-        run: terraform destroy -auto-approve -var="strapi_image=dummy" -lock-timeout=15m
+        run: terraform destroy -auto-approve -var="strapi_image=dummy"
         working-directory: ./terraform
