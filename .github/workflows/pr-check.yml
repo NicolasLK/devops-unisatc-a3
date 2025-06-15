@@ -1,0 +1,30 @@
+# .github/workflows/pr-check.yml
+
+name: Verificação de Pull Request (Testes)
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: Rodar Testes End-to-End
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Instalar navegadores do Playwright
+        run: npx playwright install --with-deps
+
+      - name: Rodar testes do Playwright
+        run: npx playwright test
