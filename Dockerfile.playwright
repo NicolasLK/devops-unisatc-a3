@@ -1,0 +1,38 @@
+# Dockerfile.playwright
+# Container específico para executar testes Playwright
+# Projeto: DevOps UNISATC A3
+
+FROM mcr.microsoft.com/playwright:v1.44.0-focal
+
+# Instala pnpm
+RUN npm install -g pnpm@latest-10
+
+# Define diretório de trabalho
+WORKDIR /app
+
+# Copia arquivos de dependências
+COPY package.json pnpm-lock.yaml ./
+
+# Instala dependências
+RUN pnpm install --frozen-lockfile
+
+# Instala browsers do Playwright
+RUN pnpm exec playwright install
+
+# Copia arquivos de configuração
+COPY playwright.config.js ./
+COPY .env.example .env
+
+# Cria diretórios necessários
+RUN mkdir -p tests test-results playwright-report playwright/.auth
+
+# Copia testes
+COPY tests/ ./tests/
+
+# Define variáveis de ambiente
+ENV CI=true
+ENV HEADLESS=true
+ENV NODE_ENV=test
+
+# Comando padrão
+CMD ["pnpm", "test"]

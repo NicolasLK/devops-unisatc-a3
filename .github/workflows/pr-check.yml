@@ -27,4 +27,4 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Rodar testes do Playwright
-        run: npx playwright test
+        run: npm run test

@@ -1,0 +1,141 @@
+# docker-compose.test.yml
+# Configuração Docker para ambiente de testes E2E
+# Projeto: DevOps UNISATC A3
+
+version: '3.8'
+
+services:
+  # Strapi Application para testes
+  strapi-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    container_name: strapi-test
+    environment:
+      - NODE_ENV=test
+      - DATABASE_CLIENT=postgres
+      - DATABASE_HOST=postgres-test
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=strapi_test
+      - DATABASE_USERNAME=strapi
+      - DATABASE_PASSWORD=strapi_test_pass
+      - JWT_SECRET=test_jwt_secret_key_for_e2e_tests
+      - ADMIN_JWT_SECRET=test_admin_jwt_secret_key
+      - APP_KEYS=test_app_key_1,test_app_key_2
+      - API_TOKEN_SALT=test_api_token_salt
+      - TRANSFER_TOKEN_SALT=test_transfer_token_salt
+      - STRAPI_DISABLE_UPDATE_NOTIFICATION=true
+    ports:
+      - "1337:1337"
+    volumes:
+      - ./config:/opt/app/config
+      - ./src:/opt/app/src
+      - ./package.json:/opt/app/package.json
+      - ./public/uploads:/opt/app/public/uploads
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1337/_health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Banco de dados PostgreSQL para testes
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: postgres-test
+    environment:
+      - POSTGRES_DB=strapi_test
+      - POSTGRES_USER=strapi
+      - POSTGRES_PASSWORD=strapi_test_pass
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strapi -d strapi_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Serviço para executar testes Playwright
+  playwright-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    container_name: playwright-tests
+    environment:
+      - CI=true
+      - STRAPI_URL=http://strapi-test:1337
+      - STRAPI_API_URL=http://strapi-test:1337/api
+      - ADMIN_EMAIL=admin@test.com
+      - ADMIN_PASSWORD=Test123456!
+      - HEADLESS=true
+    volumes:
+      - ./tests:/app/tests
+      - ./playwright.config.js:/app/playwright.config.js
+      - ./package.json:/app/package.json
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report
+    depends_on:
+      strapi-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: >
+      sh -c "
+        echo 'Aguardando Strapi estar pronto...' &&
+        sleep 30 &&
+        npm run test
+      "
+
+  # Redis para cache (opcional)
+  redis-test:
+    image: redis:7-alpine
+    container_name: redis-test
+    ports:
+      - "6379:6379"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Mailhog para testar emails (opcional)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog-test
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - test-network
+
+  # Nginx para proxy reverso (opcional)
+  nginx-test:
+    image: nginx:alpine
+    container_name: nginx-test
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.test.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - strapi-test
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  postgres_test_data:
