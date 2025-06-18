@@ -1,0 +1,57 @@
+{
+  "articles": [
+    {
+      "title": "nihil culpa nemo",
+      "content": "Provident commodi quas dolores sit. Maxime modi aliquam nisi saepe nihil incidunt occaecati deleniti. Necessitatibus ab cumque sed debitis consectetur itaque.\nInventore neque quo magnam sapiente architecto voluptate impedit. Atque nam libero harum soluta enim. Eos commodi asperiores magni.\nImpedit natus harum esse iusto. Assumenda cupiditate ea provident cupiditate consequuntur. Eligendi laudantium fugit odio corrupti similique saepe eius dolores.",
+      "description": "Laboriosam repudiandae sequi voluptates perferendis temporibus nam voluptates consequuntur ipsa.",
+      "slug": "dicta-saepe-iure",
+      "publishedAt": "2025-06-17T22:53:55.671Z"
+    },
+    {
+      "title": "modi asperiores quasi",
+      "content": "Accusantium quae dolor voluptatem architecto libero ducimus ratione dicta. Rem quasi ad incidunt facere numquam. Consequuntur itaque exercitationem porro corrupti repellat quod minus.\nEx voluptatibus doloribus vitae architecto impedit. Ad a odit consequuntur itaque deleniti. Inventore nisi voluptatibus deleniti ratione iure.\nRepellat debitis odit optio dolorem veritatis aliquam. Hic vero quo accusamus quas magnam tenetur commodi laboriosam. Laboriosam modi ipsa inventore in quibusdam.",
+      "description": "Earum magni recusandae voluptatum molestias.",
+      "slug": "culpa-eius-harum",
+      "publishedAt": "2025-06-17T23:04:35.655Z"
+    },
+    {
+      "title": "neque ullam nemo",
+      "content": "Provident officiis doloribus vero error similique tempore deleniti. In tempore sequi corporis earum delectus molestiae quae itaque. Deleniti omnis voluptate eveniet soluta facere a explicabo.\nEnim quam deleniti impedit doloribus ullam debitis veniam eligendi eos. Similique suscipit ea ex minus. Reprehenderit tenetur similique autem.\nAd labore nemo nihil. Repellat molestiae est dolores id distinctio tempora deserunt expedita. Ratione quae blanditiis.",
+      "description": "Corrupti quibusdam rem.",
+      "slug": "natus-ratione-soluta",
+      "publishedAt": "2025-06-17T13:31:52.535Z"
+    },
+    {
+      "title": "aliquam vel totam",
+      "content": "Esse veritatis vel porro. Nulla neque corrupti voluptas eveniet id. Voluptate expedita quos porro itaque cumque ipsam a laborum.\nQuisquam aspernatur sit molestiae error nobis sed cupiditate. Odit dolorem magnam. Commodi repellendus quibusdam ab optio suscipit in corrupti similique.\nSoluta voluptatum minima recusandae dignissimos iste fugit dignissimos fuga exercitationem. Est qui inventore unde impedit. Minima debitis deleniti amet minus nisi laboriosam reprehenderit minus assumenda.",
+      "description": "Rem delectus quod esse iste nisi iusto.",
+      "slug": "cupiditate-sit-repellat",
+      "publishedAt": "2025-06-17T14:52:38.132Z"
+    },
+    {
+      "title": "maxime possimus perspiciatis",
+      "content": "Fugit libero iusto. Quos consectetur possimus et fugiat ea. Blanditiis corrupti natus magni nihil aperiam quia quaerat provident dolores.\nInventore velit delectus numquam ducimus. Voluptatem velit necessitatibus. Doloribus cum quasi iure in.\nMolestias praesentium porro molestiae at ipsam aut repellendus animi. Quisquam tempore animi aperiam officia explicabo autem. Aliquid dolores sed.",
+      "description": "Esse perspiciatis voluptates sint magnam optio odio autem minima.",
+      "slug": "harum-quidem-mollitia",
+      "publishedAt": "2025-06-17T09:10:45.451Z"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Jardim",
+      "description": "Dolores praesentium suscipit dolorum placeat debitis quam similique commodi.",
+      "slug": "eletronicos"
+    },
+    {
+      "name": "Música",
+      "description": "Quod commodi vero possimus iusto fugit numquam.",
+      "slug": "jardim"
+    },
+    {
+      "name": "Filmes",
+      "description": "Quae in et magnam quas voluptatum magnam eum.",
+      "slug": "turismo"
+    }
+  ],
+  "users": []
+}

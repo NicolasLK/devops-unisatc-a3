@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "A Strapi application",
+   "main": "index.js",
   "scripts": {
     "build": "strapi build",
     "console": "strapi console",
@@ -13,8 +14,36 @@
     "start": "strapi start",
     "strapi": "strapi",
     "upgrade": "npx @strapi/upgrade latest",
-    "upgrade:dry": "npx @strapi/upgrade latest --dry"
+    "upgrade:dry": "npx @strapi/upgrade latest --dry",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:install": "playwright install",
+    "test:admin": "playwright test --grep=\"@admin\"",
+    "test:api": "playwright test --grep=\"@api\"",
+    "test:auth": "playwright test --grep=\"@auth\"",
+    "test:content": "playwright test --grep=\"@content\"",
+    "test:smoke": "playwright test --grep=\"@smoke\"",
+    "test:regression": "playwright test --grep=\"@regression\"",
+    "test:ci": "playwright test --reporter=github",
+    "test:docker": "docker run --rm -v $(pwd):/workspace -w /workspace mcr.microsoft.com/playwright:focal npm run test",
+    "setup": "node scripts/setup-test-data.js",
+    "cleanup": "node scripts/cleanup-test-data.js"
   },
+  "keywords": [
+    "playwright",
+    "e2e",
+    "testing",
+    "strapi",
+    "headless-cms",
+    "devops",
+    "automation",
+    "unisatc"
+  ],
+  "author": "Jhayne, Nikolas",
+  "license": "MIT",
   "dependencies": {
     "@strapi/plugin-cloud": "5.12.3",
     "@strapi/plugin-users-permissions": "5.12.3",
@@ -25,13 +54,18 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
-    "styled-components": "^6.0.0"
+    "styled-components": "^6.0.0",
+    "@faker-js/faker": "^8.4.1",
+    "form-data": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@playwright/test": "^1.44.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.2"
   },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",
