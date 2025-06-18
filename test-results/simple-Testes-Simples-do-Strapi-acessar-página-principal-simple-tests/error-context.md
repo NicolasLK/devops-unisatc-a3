@@ -4,7 +4,7 @@
 - heading "Não é possível acessar esse site" [level=1]
 - paragraph:
   - text: A conexão com
-  - strong: localhost
+  - strong: 127.0.0.1
   - text: foi recusada.
 - paragraph: "Tente:"
 - list:

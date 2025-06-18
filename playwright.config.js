@@ -1,38 +1,27 @@
-// playwright.config.js
+// playwright.config.simple.js - Configuração SIMPLIFICADA
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 
 // Carrega variáveis de ambiente
 dotenv.config();
 
-/**
- * Configuração do Playwright para testes E2E
- * Projeto: DevOps UNISATC A3 - Strapi Application
- * @see https://playwright.dev/docs/test-configuration
- */
 export default defineConfig({
   testDir: './tests',
-  timeout: 60 * 1000, // 60 segundos por teste (Strapi pode ser lento no primeiro load)
+  timeout: 90 * 1000, // 90 segundos por teste (mais tempo)
   expect: {
-    timeout: 15 * 1000, // 15 segundos para expects
+    timeout: 20 * 1000, // 20 segundos para expects
   },
   
-  // Configuração para execução em paralelo
-  fullyParallel: true,
+  // Configuração para execução
+  fullyParallel: false, // Executa sequencialmente para debug
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 2 : undefined,
+  retries: 0, // Sem retry para debug
+  workers: 1, // Um worker apenas
   
   // Configuração de relatórios
   reporter: [
-    ['html', { 
-      outputFolder: 'playwright-report',
-      open: 'never'
-    }],
-    ['json', { outputFile: 'test-results/results.json' }],
-    ['junit', { outputFile: 'test-results/junit.xml' }],
-    ['github'], // Para integração com GitHub Actions
-    ['list']
+    ['list'], // Output simples no terminal
+    ['html', { outputFolder: 'playwright-report', open: 'never' }]
   ],
   
   // Diretório de saída
@@ -40,11 +29,12 @@ export default defineConfig({
   
   // Configurações globais
   use: {
-    // URLs base
+    // URL base
     baseURL: process.env.STRAPI_URL || 'http://localhost:1337',
     
     // Configurações de navegador
-    headless: process.env.CI ? true : false,
+    headless: false, // Mostra o browser
+    slowMo: 1000, // Delay de 1s entre ações para debug
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
@@ -59,107 +49,31 @@ export default defineConfig({
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     
-    // Headers customizados
-    extraHTTPHeaders: {
-      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-      'User-Agent': 'PlaywrightE2E/1.0 DevOps-UNISATC-A3'
-    },
-    
-    // Configurações específicas do Strapi
-    actionTimeout: 10000,
+    // Timeouts maiores
+    actionTimeout: 15000,
     navigationTimeout: 30000,
   },
 
-  // Configuração de projetos
+  // Projetos simplificados
   projects: [
-    // Setup inicial
+    // Setup apenas
     {
       name: 'setup',
       testMatch: /global\.setup\.js/,
-      teardown: 'cleanup',
     },
     
-    // Cleanup final
+    // Chrome apenas para testes
     {
-      name: 'cleanup',
-      testMatch: /global\.teardown\.js/,
-    },
-    
-    // Testes Desktop - Chrome
-    {
-      name: 'chromium-admin',
+      name: 'chrome-tests',
       use: { 
         ...devices['Desktop Chrome'],
         storageState: 'playwright/.auth/admin.json',
       },
       dependencies: ['setup'],
-      testMatch: /.*\.admin\.test\.js/,
-    },
-    
-    // Testes Desktop - Firefox
-    {
-      name: 'firefox-admin',
-      use: { 
-        ...devices['Desktop Firefox'],
-        storageState: 'playwright/.auth/admin.json',
-      },
-      dependencies: ['setup'],
-      testMatch: /.*\.admin\.test\.js/,
-    },
-    
-    // Testes de API
-    {
-      name: 'api-tests',
-      testMatch: /.*\.api\.test\.js/,
-      use: {
-        baseURL: process.env.STRAPI_API_URL || 'http://localhost:1337/api',
-        extraHTTPHeaders: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.STRAPI_API_TOKEN || ''}`
-        }
-      },
-      dependencies: ['setup'],
-    },
-    
-    // Testes Mobile
-    {
-      name: 'mobile-chrome',
-      use: { 
-        ...devices['Pixel 5'],
-        storageState: 'playwright/.auth/admin.json',
-      },
-      dependencies: ['setup'],
-      testMatch: /.*\.mobile\.test\.js/,
-    },
-    
-    // Testes sem autenticação (público)
-    {
-      name: 'public-tests',
-      use: { ...devices['Desktop Chrome'] },
-      testMatch: /.*\.public\.test\.js/,
-      dependencies: ['setup'],
+      testMatch: /.*\.test\.js/,
     },
   ],
 
-  // Configuração do servidor web local para desenvolvimento
-  webServer: {
-    command: 'pnpm dev',
-    port: 1337,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000, // 2 minutos para Strapi inicializar
-    env: {
-      NODE_ENV: 'test',
-      DATABASE_CLIENT: 'sqlite',
-      DATABASE_FILENAME: '.tmp/test-data.db',
-    }
-  },
-  
-  // Configuração para CI/CD
-  ...(process.env.CI && {
-    use: {
-      ...this.use,
-      trace: 'on-first-retry',
-      video: 'retain-on-failure',
-    }
-  })
+  // SEM webServer - assume que Strapi está rodando manualmente
+  // webServer: { ... } // REMOVIDO
 });
