@@ -1,0 +1,57 @@
+{
+  "articles": [
+    {
+      "title": "ut animi reiciendis",
+      "content": "Quod facere hic repellendus. Libero earum suscipit earum. Animi voluptatibus sapiente aperiam quos reiciendis ipsam iste.\nReiciendis consequuntur nostrum asperiores odit accusamus expedita laudantium. Quae est voluptatum asperiores facilis nemo. Cum id quia eum eligendi necessitatibus unde tempore quae id.\nNihil sit fugit nisi facere ducimus minus voluptatibus dolor. Nam incidunt facilis fugit saepe est. Omnis facere saepe ipsam dicta.",
+      "description": "Consectetur eveniet dignissimos quisquam atque velit eligendi ipsa voluptates maxime.",
+      "slug": "culpa-ratione-maxime",
+      "publishedAt": "2025-06-17T18:12:04.882Z"
+    },
+    {
+      "title": "in dolores omnis",
+      "content": "Eveniet sint saepe consectetur veniam vero beatae asperiores. Tenetur non voluptatum eius necessitatibus. Consequuntur non officiis aspernatur quibusdam.\nEum reiciendis nam neque ea libero quaerat vitae consequuntur optio. Mollitia commodi tenetur praesentium minus ullam. Blanditiis maxime alias pariatur odio deserunt perferendis.\nExcepturi numquam deleniti hic. Animi alias itaque voluptatum in eum magnam iste. Voluptatem ab quasi quisquam hic ab voluptas.",
+      "description": "Adipisci quam quaerat cum rem sunt enim.",
+      "slug": "iusto-molestiae-quis",
+      "publishedAt": "2025-06-17T05:14:48.883Z"
+    },
+    {
+      "title": "facilis vitae sapiente",
+      "content": "Cum odit non nam vero eveniet. Quibusdam consectetur eum. Ad dolores iusto dolorem enim consequatur ipsa sequi sint.\nQuod possimus at nobis nemo ducimus fuga. Quas deleniti optio alias voluptatibus. Asperiores eius voluptatum ducimus voluptate saepe.\nNisi ducimus quaerat aspernatur sint. Repellendus cupiditate ducimus pariatur. Velit autem ipsam consectetur commodi quod totam.",
+      "description": "Optio hic labore nam placeat aut.",
+      "slug": "exercitationem-dolor-necessitatibus",
+      "publishedAt": "2025-06-17T12:35:02.964Z"
+    },
+    {
+      "title": "animi at hic",
+      "content": "A sit facilis assumenda officiis totam ad reprehenderit ad voluptas. Ex inventore dicta odit cupiditate dolorum accusantium harum accusantium fuga. Delectus quam ipsam.\nEx error autem quae laborum. Totam quo deleniti reiciendis accusamus aliquid necessitatibus ex dolorem suscipit. Sit consequatur voluptatem.\nTempore harum velit nisi. Est quis ab molestiae quisquam officia. Explicabo sunt iusto voluptatem.",
+      "description": "Neque quia quia earum et accusantium debitis similique esse.",
+      "slug": "corporis-repellendus-nemo",
+      "publishedAt": "2025-06-17T06:32:12.733Z"
+    },
+    {
+      "title": "fuga ipsum impedit",
+      "content": "Quis possimus sit quia perspiciatis illum sed. Consectetur illo odit molestias expedita ratione. Dolor inventore reprehenderit eveniet laudantium ad distinctio pariatur quidem cupiditate.\nAutem provident officiis eligendi ipsa quod reprehenderit. Maiores nostrum sequi veniam sint quo. Ipsam et quisquam error consectetur quaerat culpa unde qui numquam.\nRatione vel est nam explicabo similique. Ab ut fugiat perspiciatis nisi amet. Eaque repellat labore sed.",
+      "description": "Quae doloremque pariatur facere illum totam veritatis.",
+      "slug": "porro-laboriosam-consectetur",
+      "publishedAt": "2025-06-17T20:04:39.206Z"
+    }
+  ],
+  "categories": [
+    {
+      "name": "Esportes",
+      "description": "Repellat voluptate iste maiores deleniti voluptates.",
+      "slug": "turismo"
+    },
+    {
+      "name": "Brinquedos",
+      "description": "Perspiciatis nemo ipsam maxime nostrum.",
+      "slug": "bebe"
+    },
+    {
+      "name": "Livros",
+      "description": "Voluptas fuga deleniti quibusdam.",
+      "slug": "computadores"
+    }
+  ],
+  "users": []
+}

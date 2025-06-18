@@ -1,0 +1,502 @@
+# .github/workflows/terraform-deploy.yml
+# Workflow para deploy automatizado usando Terraform no Google Cloud Platform
+# Projeto: DevOps UNISATC A3 - Strapi Application
+
+name: 🚀 Terraform Deploy
+
+on:
+  push:
+    branches: [ master, main ]
+    paths: 
+      - 'terraform/**'
+      - '.github/workflows/terraform-deploy.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths: 
+      - 'terraform/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      auto_approve:
+        description: 'Auto approve (use with caution)'
+        type: boolean
+        default: false
+
+env:
+  TF_VERSION: '1.5.7'
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: 'us-central1'
+  GCP_ZONE: 'us-central1-a'
+
+jobs:
+  # Job para validação do Terraform
+  terraform-validate:
+    name: 🔍 Terraform Validate
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: 🔍 Terraform Format Check
+        working-directory: ./terraform
+        run: |
+          echo "🎨 Checking Terraform formatting..."
+          terraform fmt -check -recursive
+          if [ $? -ne 0 ]; then
+            echo "❌ Terraform files are not properly formatted"
+            echo "💡 Run 'terraform fmt -recursive' to fix formatting"
+            exit 1
+          fi
+          echo "✅ Terraform formatting is correct"
+
+      - name: 🔧 Terraform Init
+        working-directory: ./terraform
+        run: |
+          echo "🔧 Initializing Terraform..."
+          terraform init -backend=false
+        env:
+          TF_IN_AUTOMATION: true
+
+      - name: ✅ Terraform Validate
+        working-directory: ./terraform
+        run: |
+          echo "✅ Validating Terraform configuration..."
+          terraform validate
+          echo "✅ Terraform configuration is valid"
+
+      - name: 🔒 Security scan with tfsec
+        run: |
+          echo "🔒 Running security scan with tfsec..."
+          
+          # Instala tfsec
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          
+          # Executa scan
+          tfsec ./terraform --format json --out tfsec-results.json || true
+          
+          # Mostra resultados
+          if [ -f "tfsec-results.json" ]; then
+            echo "📊 Security scan results:"
+            cat tfsec-results.json | jq '.results[] | select(.severity == "HIGH" or .severity == "CRITICAL")' || true
+          fi
+        continue-on-error: true
+
+  # Job para plan do Terraform
+  terraform-plan:
+    name: 📋 Terraform Plan
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ env.GCP_REGION }}
+      TF_VAR_zone: ${{ env.GCP_ZONE }}
+      TF_VAR_environment: ${{ matrix.environment }}
+      TF_VAR_image_tag: ${{ github.sha }}
+      
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠️ Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: 🔧 Terraform Init
+        working-directory: ./terraform
+        run: |
+          echo "🔧 Initializing Terraform for ${{ matrix.environment }}..."
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCP_TF_STATE_BUCKET }}" \
+            -backend-config="prefix=terraform/state/${{ matrix.environment }}"
+        env:
+          TF_IN_AUTOMATION: true
+
+      - name: 🏗️ Select or Create Workspace
+        working-directory: ./terraform
+        run: |
+          echo "🏗️ Managing Terraform workspace for ${{ matrix.environment }}..."
+          
+          # Lista workspaces existentes
+          terraform workspace list
+          
+          # Seleciona ou cria workspace
+          if terraform workspace select ${{ matrix.environment }} 2>/dev/null; then
+            echo "✅ Workspace ${{ matrix.environment }} selected"
+          else
+            echo "🆕 Creating new workspace ${{ matrix.environment }}"
+            terraform workspace new ${{ matrix.environment }}
+          fi
+
+      - name: 📋 Terraform Plan
+        working-directory: ./terraform
+        run: |
+          echo "📋 Creating Terraform plan for ${{ matrix.environment }}..."
+          
+          terraform plan \
+            -var-file="environments/${{ matrix.environment }}.tfvars" \
+            -out=tfplan-${{ matrix.environment }} \
+            -detailed-exitcode
+          
+          PLAN_EXIT_CODE=$?
+          
+          if [ $PLAN_EXIT_CODE -eq 0 ]; then
+            echo "ℹ️ No changes detected"
+            echo "terraform-changes=false" >> $GITHUB_OUTPUT
+          elif [ $PLAN_EXIT_CODE -eq 2 ]; then
+            echo "📝 Changes detected"
+            echo "terraform-changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Terraform plan failed"
+            exit 1
+          fi
+        id: plan
+
+      - name: 📊 Generate Plan Summary
+        working-directory: ./terraform
+        run: |
+          echo "📊 Generating plan summary..."
+          
+          # Mostra resumo do plano
+          terraform show -no-color tfplan-${{ matrix.environment }} > plan-output.txt
+          
+          # Adiciona ao summary do GitHub
+          echo "## 📋 Terraform Plan Summary - ${{ matrix.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "<details>" >> $GITHUB_STEP_SUMMARY
+          echo "<summary>📝 Plan Details</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`terraform" >> $GITHUB_STEP_SUMMARY
+          head -100 plan-output.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📤 Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.environment }}
+          path: |
+            terraform/tfplan-${{ matrix.environment }}
+            terraform/plan-output.txt
+          retention-days: 30
+
+      - name: 💬 Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('terraform/plan-output.txt', 'utf8');
+            const truncatedPlan = planOutput.length > 60000 ? 
+              planOutput.slice(0, 60000) + '\n\n... (truncated)' : 
+              planOutput;
+            
+            const body = `## 📋 Terraform Plan - ${{ matrix.environment }}
+            
+            <details>
+            <summary>📝 Click to see plan details</summary>
+            
+            \`\`\`terraform
+            ${truncatedPlan}
+            \`\`\`
+            </details>
+            
+            **Changes detected**: ${{ steps.plan.outputs.terraform-changes }}
+            **Environment**: ${{ matrix.environment }}
+            **Commit**: ${{ github.sha }}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Job para apply do Terraform
+  terraform-apply:
+    name: 🚀 Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, terraform-plan]
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+    
+    environment: 
+      name: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ env.GCP_REGION }}
+      TF_VAR_zone: ${{ env.GCP_ZONE }}
+      TF_VAR_environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      TF_VAR_image_tag: ${{ github.sha }}
+      ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠️ Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: 📥 Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan-${{ env.ENVIRONMENT }}
+          path: terraform/
+
+      - name: 🔧 Terraform Init
+        working-directory: ./terraform
+        run: |
+          echo "🔧 Initializing Terraform for apply..."
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCP_TF_STATE_BUCKET }}" \
+            -backend-config="prefix=terraform/state/${{ env.ENVIRONMENT }}"
+        env:
+          TF_IN_AUTOMATION: true
+
+      - name: 🏗️ Select Workspace
+        working-directory: ./terraform
+        run: |
+          echo "🏗️ Selecting workspace ${{ env.ENVIRONMENT }}..."
+          terraform workspace select ${{ env.ENVIRONMENT }}
+
+      - name: 🚀 Terraform Apply
+        working-directory: ./terraform
+        run: |
+          echo "🚀 Applying Terraform changes for ${{ env.ENVIRONMENT }}..."
+          
+          if [ "${{ github.event.inputs.auto_approve }}" == "true" ] || [ "${{ github.event_name }}" == "push" ]; then
+            terraform apply tfplan-${{ env.ENVIRONMENT }}
+          else
+            echo "❌ Manual approval required for apply"
+            exit 1
+          fi
+          
+          echo "✅ Terraform apply completed successfully"
+
+      - name: 📊 Get Deployment Info
+        working-directory: ./terraform
+        run: |
+          echo "📊 Getting deployment information..."
+          
+          # Obtém outputs do Terraform
+          terraform output -json > outputs.json
+          
+          echo "## 🚀 Deployment Summary - ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Extrai informações relevantes dos outputs
+          if [ -f "outputs.json" ]; then
+            APPLICATION_URL=$(cat outputs.json | jq -r '.application_url.value // "N/A"')
+            LOAD_BALANCER_IP=$(cat outputs.json | jq -r '.load_balancer_ip.value // "N/A"')
+            DATABASE_INSTANCE=$(cat outputs.json | jq -r '.database_instance.value // "N/A"')
+            
+            echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Environment** | ${{ env.ENVIRONMENT }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Application URL** | ${APPLICATION_URL} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Load Balancer IP** | ${LOAD_BALANCER_IP} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Database** | ${DATABASE_INSTANCE} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Image Tag** | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Deployed At** | $(date -u +'%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 🔍 Health Check
+        run: |
+          echo "🔍 Performing health check..."
+          
+          # Obtém URL da aplicação
+          APPLICATION_URL=$(cd terraform && terraform output -raw application_url 2>/dev/null || echo "")
+          
+          if [ -n "$APPLICATION_URL" ]; then
+            echo "🌐 Testing application at: $APPLICATION_URL"
+            
+            # Aguarda aplicação estar disponível
+            for i in {1..30}; do
+              if curl -f "$APPLICATION_URL/_health" >/dev/null 2>&1; then
+                echo "✅ Application is healthy!"
+                break
+              fi
+              
+              if [ $i -eq 30 ]; then
+                echo "⚠️ Health check timeout - application may still be starting"
+              else
+                echo "⏳ Waiting for application to be ready... (attempt $i/30)"
+                sleep 10
+              fi
+            done
+          else
+            echo "ℹ️ Application URL not available, skipping health check"
+          fi
+
+  # Job para destroy (apenas manual)
+  terraform-destroy:
+    name: 🗑️ Terraform Destroy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    
+    environment: 
+      name: ${{ github.event.inputs.environment }}-destroy
+    
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ env.GCP_REGION }}
+      TF_VAR_zone: ${{ env.GCP_ZONE }}
+      TF_VAR_environment: ${{ github.event.inputs.environment }}
+      ENVIRONMENT: ${{ github.event.inputs.environment }}
+      
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠️ Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: 🔧 Terraform Init
+        working-directory: ./terraform
+        run: |
+          echo "🔧 Initializing Terraform for destroy..."
+          
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCP_TF_STATE_BUCKET }}" \
+            -backend-config="prefix=terraform/state/${{ env.ENVIRONMENT }}"
+        env:
+          TF_IN_AUTOMATION: true
+
+      - name: 🏗️ Select Workspace
+        working-directory: ./terraform
+        run: |
+          echo "🏗️ Selecting workspace ${{ env.ENVIRONMENT }}..."
+          terraform workspace select ${{ env.ENVIRONMENT }}
+
+      - name: 📋 Terraform Destroy Plan
+        working-directory: ./terraform
+        run: |
+          echo "📋 Creating destroy plan..."
+          
+          terraform plan -destroy \
+            -var-file="environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -out=destroy-plan
+
+      - name: 🗑️ Terraform Destroy
+        working-directory: ./terraform
+        if: github.event.inputs.auto_approve == 'true'
+        run: |
+          echo "🗑️ Destroying infrastructure for ${{ env.ENVIRONMENT }}..."
+          echo "⚠️ This action will delete all resources!"
+          
+          terraform apply destroy-plan
+          
+          echo "✅ Infrastructure destroyed successfully"
+
+      - name: ❌ Manual approval required
+        if: github.event.inputs.auto_approve != 'true'
+        run: |
+          echo "❌ Manual approval required for destroy operation"
+          echo "💡 Re-run with auto_approve=true to proceed"
+          exit 1
+
+  # Job para notificações
+  notify:
+    name: 📬 Deployment Notifications
+    runs-on: ubuntu-latest
+    needs: [terraform-apply]
+    if: always() && needs.terraform-apply.result != 'skipped'
+    
+    steps:
+      - name: ✅ Success notification
+        if: needs.terraform-apply.result == 'success'
+        run: |
+          echo "✅ Deployment successful!"
+          echo "🚀 Environment: ${{ needs.terraform-apply.outputs.environment || 'N/A' }}"
+          echo "🔗 Check deployment summary above for details"
+
+      - name: ❌ Failure notification
+        if: needs.terraform-apply.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          echo "🔍 Check the logs above for details"
+          echo "🛠️ Manual intervention may be required"
+          
+          # Aqui você pode adicionar integração com Slack/Teams se necessário
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"🚨 Terraform deploy failed for DevOps UNISATC A3"}' \
+          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: 📊 Final Summary
+        run: |
+          echo "## 📊 Deployment Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+          echo "| Plan | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+          echo "| Apply | ${{ needs.terraform-apply.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run**: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
