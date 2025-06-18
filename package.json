@@ -13,7 +13,21 @@
     "start": "strapi start",
     "strapi": "strapi",
     "upgrade": "npx @strapi/upgrade latest",
-    "upgrade:dry": "npx @strapi/upgrade latest --dry"
+    "upgrade:dry": "npx @strapi/upgrade latest --dry",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:install": "playwright install",
+    "test:admin": "playwright test --grep=\"@admin\"",
+    "test:api": "playwright test --grep=\"@api\"",
+    "test:auth": "playwright test --grep=\"@auth\"",
+    "test:content": "playwright test --grep=\"@content\"",
+    "test:smoke": "playwright test --grep=\"@smoke\"",
+    "test:regression": "playwright test --grep=\"@regression\"",
+    "test:ci": "playwright test --reporter=github",
+    "test:docker": "docker run --rm -v $(pwd):/workspace -w /workspace mcr.microsoft.com/playwright:focal npm run test"
   },
   "dependencies": {
     "@strapi/plugin-cloud": "5.12.3",
@@ -28,6 +42,7 @@
     "styled-components": "^6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.0",
     "@types/node": "^20.19.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
