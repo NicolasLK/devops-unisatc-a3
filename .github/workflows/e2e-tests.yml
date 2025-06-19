@@ -1,5 +1,5 @@
 # .github/workflows/e2e-tests.yml
-# Workflow de CI/CD para Testes E2E com Playwright
+# Workflow Simplificado para Testes E2E com Playwright
 # Projeto: DevOps UNISATC A3 - Strapi Application
 
 name: 🎭 E2E Tests
@@ -9,113 +9,62 @@ on:
     branches: [ master, main, develop ]
   pull_request:
     branches: [ master, main, develop ]
-  schedule:
-    # Executa testes diariamente às 2:00 AM UTC
-    - cron: '0 2 * * *'
   workflow_dispatch:
-    # Permite execução manual
-    inputs:
-      test_type:
-        description: 'Tipo de teste para executar'
-        required: true
-        default: 'all'
-        type: choice
-        options: ['all', 'smoke', 'admin', 'api', 'integration']
 
 env:
   NODE_VERSION: '20'
   PNPM_VERSION: '10.12.1'
 
 jobs:
-  # Job para setup e cache
-  setup:
-    name: 🔧 Setup Environment
+  # Job único e simplificado
+  e2e-tests:
+    name: 🧪 E2E Tests
     runs-on: ubuntu-latest
-    outputs:
-      cache-key: ${{ steps.cache-key.outputs.key }}
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js and pnpm
+        uses: actions/setup-node@v4
         with: 
           node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
+
+      - name: 🔧 Setup pnpm
+        uses: pnpm/action-setup@v3
         with: 
           version: ${{ env.PNPM_VERSION }}
-      - id: cache-key
-        run: echo "key=node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
-      - uses: actions/cache@v4
-        id: cache-deps
+
+      - name: 💾 Cache Dependencies
+        uses: actions/cache@v4
         with:
-          key: ${{ steps.cache-key.outputs.key }}
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: node-modules-${{ runner.os }}-
           path: |
             node_modules
             ~/.cache/ms-playwright
-      - name: Install deps if cache miss
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+
+      - name: 📥 Install Dependencies
         run: pnpm install --no-frozen-lockfile
-      - name: Install Playwright browsers
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+
+      - name: 🎭 Install Playwright Browsers
         run: pnpm exec playwright install --with-deps
 
-  # Job para build da aplicação Strapi
-  build:
-    name: 🏗️ Build Strapi (SQLite)
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with: 
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      - name: Build Strapi
+      - name: 📁 Create Required Directories
         run: |
-          pnpm build
+          mkdir -p build
+          mkdir -p .tmp
+          echo "Build directory created" > build/placeholder.txt
+          echo "Temp directory created" > .tmp/placeholder.txt
+
+      - name: 🏗️ Build Strapi
+        run: pnpm build
         env:
           NODE_ENV: production
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/data.db
-      - uses: actions/upload-artifact@v4
-        with:
-          name: strapi-build
-          path: |
-            build/
-            .tmp/
-          retention-days: 1
 
-  # Job para testes de smoke (rápidos e essenciais)
-  smoke-tests:
-    name: 💨 Smoke Tests
-    runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: "contains(fromJSON('[\"smoke\", \"all\", \"\"]'), github.event.inputs.test_type)"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with: 
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      - uses: actions/download-artifact@v4
-        with: 
-          name: strapi-build
-      - name: Start Strapi
+      - name: 🚀 Start Strapi in Background
         run: |
           pnpm start &
           echo $! > strapi.pid
@@ -124,224 +73,33 @@ jobs:
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
           STRAPI_DISABLE_UPDATE_NOTIFICATION: true
-      - name: Wait for Strapi
+
+      - name: ⏳ Wait for Strapi to be Ready
         run: |
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
-      - name: Run smoke tests
-        run: pnpm test --grep="@smoke"
+          echo "Aguardando Strapi ficar saudável..."
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando..."; sleep 5; done'
+          echo "✅ Strapi está pronto!"
+
+      - name: 🎭 Run E2E Tests
+        run: pnpm test
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-      - uses: actions/upload-artifact@v4
+
+      - name: 📊 Upload Test Results
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: smoke-test-results
+          name: test-results-${{ github.run_id }}
           path: |
             test-results/
             playwright-report/
-      - name: 🧹 Cleanup Strapi
-        if: always()
-        run: kill $(cat strapi.pid) || true
+          retention-days: 7
 
-  # Job para testes do admin panel
-  admin-tests:
-    name: 👑 Admin Panel Tests
-    runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: "contains(fromJSON('[\"admin\", \"all\", \"\"]'), github.event.inputs.test_type)"
-    strategy:
-      matrix:
-        browser: [chromium, firefox]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      - uses: actions/download-artifact@v4
-        with:
-          name: strapi-build
-      - name: Start Strapi
-        run: |
-          pnpm start &
-          echo $! > strapi.pid
-        env:
-          NODE_ENV: test
-          DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data-admin-${{ matrix.browser }}.db
-      - name: Wait for Strapi
-        run: |
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
-      - name: Run admin tests - ${{ matrix.browser }}
-        run: pnpm test --project=${{ matrix.browser }} --grep="@admin"
-        env:
-          CI: true
-          STRAPI_URL: http://localhost:1337
-      - uses: actions/upload-artifact@v4
+      - name: 🧹 Cleanup Strapi Process
         if: always()
-        with:
-          name: admin-test-results-${{ matrix.browser }}
-          path: |
-            test-results/
-            playwright-report/
-      - name: 🧹 Cleanup Strapi
-        if: always()
-        run: kill $(cat strapi.pid) || true
-
-  # Job para testes de API
-  api-tests:
-    name: 🔌 API Tests
-    runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: "contains(fromJSON('[\"api\", \"all\", \"\"]'), github.event.inputs.test_type)"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      - uses: actions/download-artifact@v4
-        with:
-          name: strapi-build
-      - name: Start Strapi
         run: |
-          pnpm start &
-          echo $! > strapi.pid
-        env:
-          NODE_ENV: test
-          DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data-api.db
-      - name: Wait for Strapi
-        run: |
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
-      - name: Run API tests
-        run: pnpm test --project=api --grep="@api"
-        env:
-          CI: true
-          STRAPI_URL: http://localhost:1337
-          STRAPI_API_URL: http://localhost:1337/api
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: api-test-results
-          path: |
-            test-results/
-            playwright-report/
-      - name: 🧹 Cleanup Strapi
-        if: always()
-        run: kill $(cat strapi.pid) || true
-
-  # Job para testes de integração
-  integration-tests:
-    name: 🔗 Integration Tests
-    runs-on: ubuntu-latest
-    needs: [setup, build]
-    if: "contains(fromJSON('[\"integration\", \"all\", \"\"]'), github.event.inputs.test_type)"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      - uses: actions/download-artifact@v4
-        with:
-          name: strapi-build
-      - name: Start Strapi
-        run: |
-          pnpm start &
-          echo $! > strapi.pid
-        env:
-          NODE_ENV: test
-          DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data-integration.db
-      - name: Wait for Strapi
-        run: |
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
-      - name: Run integration tests
-        run: pnpm test --grep="@integration"
-        env:
-          CI: true
-          STRAPI_URL: http://localhost:1337
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-test-results
-          path: |
-            test-results/
-            playwright-report/
-      - name: 🧹 Cleanup Strapi
-        if: always()
-        run: kill $(cat strapi.pid) || true
-
-  # Job para relatórios consolidados
-  report:
-    name: 📋 Generate Reports
-    runs-on: ubuntu-latest
-    needs: [smoke-tests, admin-tests, api-tests, integration-tests]
-    if: always()
-    steps:
-      - name: 📥 Download all test results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: "*test-results*"
-          merge-multiple: true
-          path: all-test-results/
-      - name: 📊 Generate consolidated report
-        id: summary
-        run: |
-          SUMMARY_BODY=$(cat <<'EOF'
-          # 🎭 E2E Test Results Summary
-          ## 📈 Test Results
-          | Test Suite | Status |
-          | :--- | :--- |
-          | 💨 Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
-          | 👑 Admin Tests | ${{ needs.admin-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
-          | 🔌 API Tests | ${{ needs.api-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
-          | 🔗 Integration Tests | ${{ needs.integration-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
-          ---
-          *Workflow: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*
-          EOF
-          )
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          echo "$SUMMARY_BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - name: 💬 Comment on PR (if applicable)
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `${{ steps.summary.outputs.summary }}`
-            });
-      - name: 📬 Send notification (on failure)
-        if: failure()
-        run: |
-          echo "❌ E2E Tests falharam! Verifique os logs para mais detalhes."
-          echo "🔗 Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -f strapi.pid ]; then
+            kill $(cat strapi.pid) || true
+            rm strapi.pid
+          fi
