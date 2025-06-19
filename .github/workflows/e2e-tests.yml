@@ -84,7 +84,7 @@ jobs:
       - name: ⏳ Wait for Strapi to be Ready
         run: |
           echo "Aguardando Strapi ficar saudável..."
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/admin/health/strapi; do echo "⏳ Aguardando..."; sleep 5; done'
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/admin/auth/login; do echo "⏳ Aguardando..."; sleep 5; done'
           echo "✅ Strapi está pronto!"
 
       - name: 🎭 Run E2E Tests
