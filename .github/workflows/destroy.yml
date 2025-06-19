@@ -1,6 +1,6 @@
 # .github/workflows/destroy.yml
 
-name: Destruir Infraestrutura Terraform (Manual)
+name: 💣 Destruir Infraestrutura Terraform (Manual)
 
 on:
   workflow_dispatch:
