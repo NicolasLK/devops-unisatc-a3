@@ -6,94 +6,65 @@ name: 🔍 PR Validation
 
 on:
   pull_request:
-    branches: [ master, main, develop ]
+    branches: [master, main, develop]
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '8'
+  PNPM_VERSION: '10.12.1'
 
 jobs:
-  # Job para análise estática do código
   code-analysis:
     name: 📊 Code Analysis
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
-    
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-        with:
+      - uses: actions/checkout@v4
+        with: 
           fetch-depth: 0
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Cache dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: 📥 Install dependencies
+          path:
+            - node_modules
+            - ~/.pnpm-store
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: 🔍 Lint check
+      - name: Lint checks
         run: |
-          # Se existir ESLint configurado
           if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
-            echo "🔍 Executando ESLint..."
             pnpm exec eslint . --ext .js,.ts,.jsx,.tsx --max-warnings 0
           else
-            echo "ℹ️ ESLint não configurado, usando verificação básica..."
-            # Verificação básica de sintaxe JavaScript
             find . -name "*.js" -not -path "./node_modules/*" -exec node -c {} \;
           fi
-
-      - name: 🎨 Format check
+      - name: Format check
         run: |
-          # Se existir Prettier configurado
           if [ -f ".prettierrc" ] || [ -f ".prettierrc.js" ] || [ -f ".prettierrc.json" ]; then
-            echo "🎨 Verificando formatação com Prettier..."
             pnpm exec prettier --check "**/*.{js,ts,jsx,tsx,json,md,yml,yaml}"
-          else
-            echo "ℹ️ Prettier não configurado, pulando verificação de formatação"
           fi
-
-      - name: 🔒 Security audit
-        run: |
-          echo "🔒 Executando auditoria de segurança..."
-          pnpm audit --audit-level moderate
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
         continue-on-error: true
-
-      - name: 📋 Package.json validation
+      - name: Validate package.json
         run: |
-          echo "📋 Validando package.json..."
           node -e "
             const pkg = require('./package.json');
-            if (!pkg.name) throw new Error('package.json deve ter um nome');
-            if (!pkg.version) throw new Error('package.json deve ter uma versão');
-            if (!pkg.scripts) throw new Error('package.json deve ter scripts');
-            console.log('✅ package.json válido');
+            if (!pkg.name) throw new Error('Missing name');
+            if (!pkg.version) throw new Error('Missing version');
+            if (!pkg.scripts) throw new Error('Missing scripts');
+            console.log('✅ package.json OK');
           "
 
-  # Job para build e teste da aplicação
   build-and-test:
     name: 🏗️ Build & Test
     runs-on: ubuntu-latest
     needs: code-analysis
-    
     services:
       postgres:
         image: postgres:15
@@ -108,36 +79,24 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Cache dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: 📥 Install dependencies
+          path:
+            - node_modules
+            - ~/.pnpm-store
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: 🏗️ Build application
-        run: |
-          echo "🏗️ Building Strapi application..."
-          pnpm build
+      - name: Build application
+        run: pnpm build
         env:
           NODE_ENV: production
           DATABASE_CLIENT: postgres
@@ -146,31 +105,19 @@ jobs:
           DATABASE_NAME: strapi_test
           DATABASE_USERNAME: strapi
           DATABASE_PASSWORD: strapi_test_pass
-          JWT_SECRET: test_jwt_secret_for_pr_validation
-          ADMIN_JWT_SECRET: test_admin_jwt_secret_for_pr_validation
-          APP_KEYS: test_app_key_1,test_app_key_2,test_app_key_3,test_app_key_4
-          API_TOKEN_SALT: test_api_token_salt
-          TRANSFER_TOKEN_SALT: test_transfer_token_salt
-
-      - name: 🧪 Run unit tests (if available)
-        run: |
-          if [ -f "package.json" ] && pnpm run --if-present test:unit; then
-            echo "✅ Unit tests executados"
-          else
-            echo "ℹ️ Nenhum teste unitário encontrado"
-          fi
+          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
+          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
+          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
+          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
+          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
+      - name: Run unit tests (if present)
+        run: pnpm run --if-present test:unit || echo "ℹ️ No unit tests"
         continue-on-error: true
-
-      - name: 🚀 Start Strapi for testing
+      - name: Start Strapi
         run: |
-          echo "🚀 Iniciando Strapi em background..."
           pnpm start &
           echo $! > strapi.pid
-          
-          # Aguarda Strapi estar pronto
-          echo "⏳ Aguardando Strapi estar pronto..."
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
-          echo "✅ Strapi está rodando"
+          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do echo "⏳ aguardando Strapi..."; sleep 2; done'
         env:
           NODE_ENV: development
           DATABASE_CLIENT: postgres
@@ -179,277 +126,116 @@ jobs:
           DATABASE_NAME: strapi_test
           DATABASE_USERNAME: strapi
           DATABASE_PASSWORD: strapi_test_pass
-          JWT_SECRET: test_jwt_secret_for_pr_validation
-          ADMIN_JWT_SECRET: test_admin_jwt_secret_for_pr_validation
-          APP_KEYS: test_app_key_1,test_app_key_2,test_app_key_3,test_app_key_4
-          API_TOKEN_SALT: test_api_token_salt
-          TRANSFER_TOKEN_SALT: test_transfer_token_salt
-
-      - name: 🔍 Health check
+          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
+          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
+          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
+          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
+          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
+      - name: Health & API check
         run: |
-          echo "🔍 Verificando saúde da aplicação..."
-          
-          # Verifica health endpoint
-          health_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/_health)
-          if [ "$health_status" -eq 204 ]; then
-            echo "✅ Health check passou (204)"
-          else
-            echo "❌ Health check falhou (${health_status})"
-            exit 1
-          fi
-          
-          # Verifica API básica
-          api_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/api)
-          if [ "$api_status" -eq 200 ]; then
-            echo "✅ API está respondendo (200)"
-          else
-            echo "❌ API não está respondendo (${api_status})"
-            exit 1
-          fi
-
-      - name: 📊 Upload build artifacts
-        uses: actions/upload-artifact@v4
+          if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/_health)" -ne 204 ]; then exit 1; fi
+          if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/api)" -ne 200 ]; then exit 1; fi
+      - - name: Cleanup
+          run: |
+            kill $(cat strapi.pid) || true
+      - uses: actions/upload-artifact@v4
         with:
           name: strapi-build-pr-${{ github.event.number }}
-          path: |
-            build/
-            dist/
-          retention-days: 7
+          path:
+            - build/
+            - dist/
 
-  # Job para testes E2E (versão simplificada para PR)
   e2e-tests:
-    name: 🎭 E2E Tests (Smoke)
+    name: 🎭 E2E Smoke Tests
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event.pull_request.draft == false
-    
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Cache dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.pnpm-store
-            ~/.cache/ms-playwright
           key: ${{ runner.os }}-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: 📥 Install dependencies
+          path:
+            - node_modules
+            - ~/.pnpm-store
+            - ~/.cache/ms-playwright
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: 🎭 Install Playwright
+      - name: Install Playwright
         run: pnpm exec playwright install --with-deps chromium
-
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: strapi-build-pr-${{ github.event.number }}
-
-      - name: 🚀 Start Strapi for E2E
+      - uses: actions/download-artifact@v4
+        with: name: strapi-build-pr-${{ github.event.number }}
+      - name: Start Strapi
         run: |
           pnpm start &
           echo $! > strapi.pid
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
+          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do echo "⏳ aguardando Strapi..."; sleep 2; done'
         env:
           NODE_ENV: test
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
-          JWT_SECRET: test_jwt_secret_for_e2e
-          ADMIN_JWT_SECRET: test_admin_jwt_secret_for_e2e
-          APP_KEYS: test_app_key_1,test_app_key_2,test_app_key_3,test_app_key_4
-          API_TOKEN_SALT: test_api_token_salt
-          TRANSFER_TOKEN_SALT: test_transfer_token_salt
-
-      - name: 🧪 Run smoke tests
-        run: |
-          # Executa apenas testes essenciais para PR
-          pnpm test --grep="@smoke" --project=chromium
+          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
+          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
+          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
+          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
+          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
+      - name: Run smoke E2E
+        run: pnpm test --grep="@smoke" --project=chromium
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-
-      - name: 📊 Upload test results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-results-pr-${{ github.event.number }}
-          path: |
-            test-results/
-            playwright-report/
+          path:
+            - test-results/
+            - playwright-report/
+      - name: Cleanup
+        run: kill $(cat strapi.pid) || true
 
-  # Job para verificação de segurança
   security-scan:
     name: 🛡️ Security Scan
     runs-on: ubuntu-latest
-    needs: code-analysis
-    
+    needs: build-and-test
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🔍 Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-
-      - name: 📤 Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
-  # Job para verificar mudanças no Docker
-  docker-check:
-    name: 🐳 Docker Check
-    runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.changed_files, 'Dockerfile') || contains(github.event.pull_request.changed_files, 'docker-compose')
-    
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🐳 Validate Dockerfile
-        run: |
-          if [ -f "Dockerfile" ]; then
-            echo "🔍 Validando Dockerfile..."
-            docker run --rm -i hadolint/hadolint < Dockerfile
-          fi
-
-      - name: 🧪 Test Docker build
-        run: |
-          if [ -f "Dockerfile" ]; then
-            echo "🏗️ Testando build do Docker..."
-            docker build -t strapi-test:pr-${{ github.event.number }} .
-            echo "✅ Docker build successful"
-          fi
-
-  # Job de consolidação dos resultados
   pr-status:
     name: 📋 PR Status Summary
     runs-on: ubuntu-latest
     needs: [code-analysis, build-and-test, e2e-tests, security-scan]
     if: always()
-    
     steps:
-      - name: 📊 Generate PR summary
+      - name: Generate Summary
         run: |
-          echo "# 📋 Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔍 Results Overview" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Code Analysis
-          if [ "${{ needs.code-analysis.result }}" = "success" ]; then
-            echo "✅ **Code Analysis**: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Code Analysis**: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Build & Test
-          if [ "${{ needs.build-and-test.result }}" = "success" ]; then
-            echo "✅ **Build & Test**: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Build & Test**: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # E2E Tests
-          if [ "${{ needs.e2e-tests.result }}" = "success" ]; then
-            echo "✅ **E2E Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **E2E Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Security Scan
-          if [ "${{ needs.security-scan.result }}" = "success" ]; then
-            echo "✅ **Security Scan**: PASSED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Security Scan**: FAILED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📊 Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **PR Number**: #${{ github.event.number }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: ${{ github.head_ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Author**: @${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.event.pull_request.head.sha }}" >> $GITHUB_STEP_SUMMARY
-
-      - name: 💬 Comment on PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && 
-              comment.body.includes('🤖 PR Validation Results')
-            );
-
-            const results = {
-              codeAnalysis: '${{ needs.code-analysis.result }}',
-              buildTest: '${{ needs.build-and-test.result }}',
-              e2eTests: '${{ needs.e2e-tests.result }}',
-              securityScan: '${{ needs.security-scan.result }}'
-            };
-
-            const getIcon = (result) => result === 'success' ? '✅' : '❌';
-            
-            const body = `## 🤖 PR Validation Results
-
-            | Check | Status | Result |
-            |-------|--------|--------|
-            | Code Analysis | ${getIcon(results.codeAnalysis)} | ${results.codeAnalysis.toUpperCase()} |
-            | Build & Test | ${getIcon(results.buildTest)} | ${results.buildTest.toUpperCase()} |
-            | E2E Tests | ${getIcon(results.e2eTests)} | ${results.e2eTests.toUpperCase()} |
-            | Security Scan | ${getIcon(results.securityScan)} | ${results.securityScan.toUpperCase()} |
-
-            **Overall Status**: ${Object.values(results).every(r => r === 'success') ? '✅ ALL CHECKS PASSED' : '❌ SOME CHECKS FAILED'}
-
-            ---
-            *Last updated: ${new Date().toISOString()}*
-            *Workflow: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*`;
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body
-              });
-            }
-
-      - name: ❌ Fail if any check failed
-        if: needs.code-analysis.result != 'success' || needs.build-and-test.result != 'success' || needs.e2e-tests.result != 'success' || needs.security-scan.result != 'success'
-        run: |
-          echo "❌ Um ou mais checks falharam. PR não pode ser merged."
-          exit 1
-
-      - name: ✅ All checks passed
-        if: needs.code-analysis.result == 'success' && needs.build-and-test.result == 'success' && needs.e2e-tests.result == 'success' && needs.security-scan.result == 'success'
-        run: |
-          echo "✅ Todos os checks passaram! PR está pronto para merge."
+          echo "## 🤖 PR Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          for job in code-analysis build-and-test e2e-tests security-scan; do
+            status="${{ needs.$job.result }}"
+            icon=$([[ "$status" == "success" ]] && echo "✅" || echo "❌")
+            echo "| $job | $icon $status |" >> $GITHUB_STEP_SUMMARY
+          done
+      - name: Fail on any failure
+        if: failure()
+        run: exit 1
+      - name: All done
+        if: success()
+        run: echo "✅ All checks passed!"

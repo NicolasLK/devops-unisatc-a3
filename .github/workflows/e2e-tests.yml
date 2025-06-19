@@ -20,104 +20,76 @@ on:
         required: true
         default: 'all'
         type: choice
-        options:
-        - all
-        - smoke
-        - admin
-        - api
-        - integration
+        options: ['all', 'smoke', 'admin', 'api', 'integration']
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '8'
+  PNPM_VERSION: '10.12.1'
 
 jobs:
   # Job para setup e cache
   setup:
-    name: 🔧 Setup
+    name: 🔧 Setup Environment
     runs-on: ubuntu-latest
     outputs:
       cache-key: ${{ steps.cache-key.outputs.key }}
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 🔑 Generate cache key
-        id: cache-key
-        run: |
-          echo "key=node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
-
-      - name: 💾 Cache dependencies
-        uses: actions/cache@v4
+      - id: cache-key
+        run: echo "key=node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v4
         id: cache-deps
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ steps.cache-key.outputs.key }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-
-
-      - name: 📥 Install dependencies
+          restore-keys: node-modules-${{ runner.os }}-
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - name: Install deps if cache miss
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
-
-      - name: 🎭 Install Playwright browsers
+      - name: Install Playwright browsers
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps
 
   # Job para build da aplicação Strapi
   build:
-    name: 🏗️ Build Strapi
+    name: 🏗️ Build Strapi (SQLite)
     runs-on: ubuntu-latest
     needs: setup
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restore dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ needs.setup.outputs.cache-key }}
-
-      - name: 🏗️ Build Strapi
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - name: Build Strapi
         run: |
           pnpm build
         env:
           NODE_ENV: production
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/data.db
-
-      - name: 📦 Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: strapi-build
-          path: |
-            build/
-            .tmp/
+          path:
+            - build/
+            - .tmp/
           retention-days: 1
 
   # Job para testes de smoke (rápidos e essenciais)
@@ -125,35 +97,25 @@ jobs:
     name: 💨 Smoke Tests
     runs-on: ubuntu-latest
     needs: [setup, build]
-    if: ${{ github.event.inputs.test_type == 'smoke' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '' }}
+    if: "contains(fromJSON('[\"smoke\", \"all\", \"\"]'), github.event.inputs.test_type)"
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
+      - uses: pnpm/action-setup@v3
+        with: 
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restore dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ needs.setup.outputs.cache-key }}
-
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - uses: actions/download-artifact@v4
+        with: 
           name: strapi-build
-
-      - name: 🚀 Start Strapi in background
+      - name: Start Strapi
         run: |
           pnpm start &
           echo $! > strapi.pid
@@ -162,212 +124,178 @@ jobs:
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
           STRAPI_DISABLE_UPDATE_NOTIFICATION: true
-
-      - name: ⏳ Wait for Strapi to be ready
+      - name: Wait for Strapi
         run: |
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
-
-      - name: 🧪 Run smoke tests
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
+      - name: Run smoke tests
         run: pnpm test --grep="@smoke"
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-
-      - name: 📊 Upload smoke test results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: smoke-test-results
-          path: |
-            test-results/
-            playwright-report/
+          path:
+            - test-results/
+            - playwright-report/
+      - name: 🧹 Cleanup Strapi
+        if: always()
+        run: kill $(cat strapi.pid) || true
 
   # Job para testes do admin panel
   admin-tests:
     name: 👑 Admin Panel Tests
     runs-on: ubuntu-latest
     needs: [setup, build]
-    if: ${{ github.event.inputs.test_type == 'admin' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '' }}
+    if: "contains(fromJSON('[\"admin\", \"all\", \"\"]'), github.event.inputs.test_type)"
     strategy:
       matrix:
         browser: [chromium, firefox]
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v3
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restore dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ needs.setup.outputs.cache-key }}
-
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - uses: actions/download-artifact@v4
         with:
           name: strapi-build
-
-      - name: 🚀 Start Strapi in background
+      - name: Start Strapi
         run: |
           pnpm start &
           echo $! > strapi.pid
         env:
           NODE_ENV: test
           DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data.db
-
-      - name: ⏳ Wait for Strapi to be ready
+          DATABASE_FILENAME: .tmp/test-data-admin-${{ matrix.browser }}.db
+      - name: Wait for Strapi
         run: |
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
-
-      - name: 🧪 Run admin tests - ${{ matrix.browser }}
-        run: pnpm test --project=${{ matrix.browser }}-admin --grep="@admin"
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
+      - name: Run admin tests - ${{ matrix.browser }}
+        run: pnpm test --project=${{ matrix.browser }} --grep="@admin"
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-
-      - name: 📊 Upload admin test results - ${{ matrix.browser }}
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: admin-test-results-${{ matrix.browser }}
-          path: |
-            test-results/
-            playwright-report/
+          path:
+            - test-results/
+            - playwright-report/
+      - name: 🧹 Cleanup Strapi
+        if: always()
+        run: kill $(cat strapi.pid) || true
 
   # Job para testes de API
   api-tests:
     name: 🔌 API Tests
     runs-on: ubuntu-latest
     needs: [setup, build]
-    if: ${{ github.event.inputs.test_type == 'api' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '' }}
+    if: "contains(fromJSON('[\"api\", \"all\", \"\"]'), github.event.inputs.test_type)"
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v3
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restore dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ needs.setup.outputs.cache-key }}
-
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - uses: actions/download-artifact@v4
         with:
           name: strapi-build
-
-      - name: 🚀 Start Strapi in background
+      - name: Start Strapi
         run: |
           pnpm start &
           echo $! > strapi.pid
         env:
           NODE_ENV: test
           DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data.db
-
-      - name: ⏳ Wait for Strapi to be ready
+          DATABASE_FILENAME: .tmp/test-data-api.db
+      - name: Wait for Strapi
         run: |
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
-
-      - name: 🧪 Run API tests
-        run: pnpm test --project=api-tests --grep="@api"
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
+      - name: Run API tests
+        run: pnpm test --project=api --grep="@api"
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
           STRAPI_API_URL: http://localhost:1337/api
-
-      - name: 📊 Upload API test results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: api-test-results
-          path: |
-            test-results/
-            playwright-report/
+          path:
+            - test-results/
+            - playwright-report/
+      - name: 🧹 Cleanup Strapi
+        if: always()
+        run: kill $(cat strapi.pid) || true
 
   # Job para testes de integração
   integration-tests:
     name: 🔗 Integration Tests
     runs-on: ubuntu-latest
     needs: [setup, build]
-    if: ${{ github.event.inputs.test_type == 'integration' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '' }}
+    if: "contains(fromJSON('[\"integration\", \"all\", \"\"]'), github.event.inputs.test_type)"
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📦 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v3
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restore dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
           key: ${{ needs.setup.outputs.cache-key }}
-
-      - name: 📥 Download build artifacts
-        uses: actions/download-artifact@v4
+          path:
+            - node_modules
+            - ~/.cache/ms-playwright
+      - uses: actions/download-artifact@v4
         with:
           name: strapi-build
-
-      - name: 🚀 Start Strapi in background
+      - name: Start Strapi
         run: |
           pnpm start &
           echo $! > strapi.pid
         env:
           NODE_ENV: test
           DATABASE_CLIENT: sqlite
-          DATABASE_FILENAME: .tmp/test-data.db
-
-      - name: ⏳ Wait for Strapi to be ready
+          DATABASE_FILENAME: .tmp/test-data-integration.db
+      - name: Wait for Strapi
         run: |
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do sleep 2; done'
-
-      - name: 🧪 Run integration tests
-        run: pnpm test integration.test.js --grep="@integration"
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando Strapi..."; sleep 5; done'
+      - name: Run integration tests
+        run: pnpm test --grep="@integration"
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-
-      - name: 📊 Upload integration test results
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results
-          path: |
-            test-results/
-            playwright-report/
+          path:
+            - test-results/
+            - playwright-report/
+      - name: 🧹 Cleanup Strapi
+        if: always()
+        run: kill $(cat strapi.pid) || true
 
   # Job para relatórios consolidados
   report:
@@ -376,93 +304,45 @@ jobs:
     needs: [smoke-tests, admin-tests, api-tests, integration-tests]
     if: always()
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
       - name: 📥 Download all test results
         uses: actions/download-artifact@v4
         with:
           pattern: "*test-results*"
           merge-multiple: true
           path: all-test-results/
-
       - name: 📊 Generate consolidated report
+        id: summary
         run: |
-          echo "# 📊 E2E Test Results Summary" > test-summary.md
-          echo "" >> test-summary.md
-          echo "## 🏃‍♂️ Execution Details" >> test-summary.md
-          echo "- **Workflow**: ${{ github.workflow }}" >> test-summary.md
-          echo "- **Run ID**: ${{ github.run_id }}" >> test-summary.md
-          echo "- **Commit**: ${{ github.sha }}" >> test-summary.md
-          echo "- **Branch**: ${{ github.ref_name }}" >> test-summary.md
-          echo "- **Triggered by**: ${{ github.event_name }}" >> test-summary.md
-          echo "- **Date**: $(date -u)" >> test-summary.md
-          echo "" >> test-summary.md
-          
-          echo "## 📈 Test Results" >> test-summary.md
-          echo "" >> test-summary.md
-          
-          # Verifica resultados dos jobs
-          if [ "${{ needs.smoke-tests.result }}" = "success" ]; then
-            echo "✅ **Smoke Tests**: PASSED" >> test-summary.md
-          else
-            echo "❌ **Smoke Tests**: FAILED" >> test-summary.md
-          fi
-          
-          if [ "${{ needs.admin-tests.result }}" = "success" ]; then
-            echo "✅ **Admin Tests**: PASSED" >> test-summary.md
-          else
-            echo "❌ **Admin Tests**: FAILED" >> test-summary.md
-          fi
-          
-          if [ "${{ needs.api-tests.result }}" = "success" ]; then
-            echo "✅ **API Tests**: PASSED" >> test-summary.md
-          else
-            echo "❌ **API Tests**: FAILED" >> test-summary.md
-          fi
-          
-          if [ "${{ needs.integration-tests.result }}" = "success" ]; then
-            echo "✅ **Integration Tests**: PASSED" >> test-summary.md
-          else
-            echo "❌ **Integration Tests**: FAILED" >> test-summary.md
-          fi
+          SUMMARY_BODY=$(cat <<'EOF'
+          # � E2E Test Results Summary
 
-      - name: 📤 Upload consolidated report
-        uses: actions/upload-artifact@v4
-        with:
-          name: consolidated-test-report
-          path: |
-            test-summary.md
-            all-test-results/
+          ## 📈 Test Results
+          | Test Suite | Status |
+          | :--- | :--- |
+          | 💨 Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
+          | 👑 Admin Tests | ${{ needs.admin-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
+          | 🔌 API Tests | ${{ needs.api-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
+          | 🔗 Integration Tests | ${{ needs.integration-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
+
+          ---
+          *Workflow: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*
+          EOF
+          )
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$SUMMARY_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: 💬 Comment on PR (if applicable)
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('test-summary.md', 'utf8');
-            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: summary
+              body: `${{ steps.summary.outputs.summary }}`
             });
-
-  # Job para cleanup e notificações
-  cleanup:
-    name: 🧹 Cleanup
-    runs-on: ubuntu-latest
-    needs: [report]
-    if: always()
-    steps:
-      - name: 🧹 Cleanup workspace
-        run: |
-          echo "Limpando workspace..."
-          rm -rf node_modules || true
-          rm -rf .tmp || true
-          rm -rf test-results || true
 
       - name: 📬 Send notification (on failure)
         if: failure()
