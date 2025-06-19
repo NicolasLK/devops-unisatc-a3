@@ -8,10 +8,11 @@ name: ✅ Validar Pull Request (Testes E2E)
 on:
   pull_request:
     branches: [master, main]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '8'
+  PNPM_VERSION: '9.4.0'
 
 jobs:
   # ===================================================================
