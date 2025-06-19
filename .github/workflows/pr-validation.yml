@@ -6,9 +6,14 @@
 name: ✅ Validar Pull Request (Testes E2E)
 
 on:
+  push:
+    branches:
+      - master
   pull_request:
-    branches: [master, main]
+    branches:
+      - master
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 env:
   NODE_VERSION: '20'
@@ -48,6 +53,10 @@ jobs:
             node_modules
             ~/.cache/ms-playwright
 
+      - name: 🛠️ Instalar Ferramentas de Build
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
       - name: 📥 Instalar Dependências (se não houver cache)
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --no-frozen-lockfile
@@ -63,18 +72,13 @@ jobs:
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/data.db
 
-      - name: 🕵️ Listar arquivos após o build (Debug)
-        run: ls -laR
-
       - name: 📤 Salvar Build como Artefato
         uses: actions/upload-artifact@v4
         with:
           name: strapi-build-${{ github.run_id }}
           path: |
             build/
-            dist
             .tmp/
-          if-no-files-found: error
           retention-days: 1
 
   # ===================================================================
