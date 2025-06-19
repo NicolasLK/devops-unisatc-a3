@@ -48,9 +48,9 @@ jobs:
         with:
           key: ${{ steps.cache-key.outputs.key }}
           restore-keys: node-modules-${{ runner.os }}-
-          path:
-            - node_modules
-            - ~/.cache/ms-playwright
+          path: |
+            node_modules
+            ~/.cache/ms-playwright
       - name: Install deps if cache miss
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
@@ -74,9 +74,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           key: ${{ needs.setup.outputs.cache-key }}
-          path:
-            - node_modules
-            - ~/.cache/ms-playwright
+          path: |
+            node_modules
+            ~/.cache/ms-playwright
       - name: Build Strapi
         run: |
           pnpm build
