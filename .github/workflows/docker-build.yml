@@ -6,10 +6,12 @@ name: 🐳 Docker Build & Push
 
 on:
   push:
-    branches: [ master, main ]
+    branches: 
+      - master
     tags: [ 'v*' ]
   pull_request:
-    branches: [ master, main ]
+    branches: 
+      - master
   workflow_dispatch:
 
 # Variáveis de ambiente para todo o workflow
