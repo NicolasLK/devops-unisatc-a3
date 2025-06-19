@@ -6,7 +6,7 @@ on:
       - master
 
 env:
-  GCP_PROJECT_ID: sound-dialect-458215-j9
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: 159248096205
   GCP_REGION: southamerica-east1
   GCP_ARTIFACT_REPO: devops-repo
@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-and-push:
-    name: Build and Push Docker Image
+    name: 🐳 Build and Push Docker Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,7 +60,7 @@ jobs:
       - name: Terraform Apply
         env:
           TF_VAR_app_keys: ${{ secrets.STRAPI_APP_KEYS }}
-          TF_VAR_api_token_salt: ${{ secrets.secrets.STRAPI_API_TOKEN_SALT }}
+          TF_VAR_api_token_salt: ${{ secrets.STRAPI_API_TOKEN_SALT }}
           TF_VAR_admin_jwt_secret: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
           TF_VAR_jwt_secret: ${{ secrets.STRAPI_JWT_SECRET }}
           TF_VAR_transfer_token_salt: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
