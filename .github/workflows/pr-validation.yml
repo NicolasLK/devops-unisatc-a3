@@ -7,9 +7,11 @@ name: ✅ Validar Pull Request (Testes E2E)
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches:
+      - master
   pull_request:
-    branches: [master, main]
+    branches:
+      - master
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
@@ -70,18 +72,13 @@ jobs:
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/data.db
 
-      - name: 🕵️ Listar arquivos após o build (Debug)
-        run: ls -laR
-
       - name: 📤 Salvar Build como Artefato
         uses: actions/upload-artifact@v4
         with:
           name: strapi-build-${{ github.run_id }}
           path: |
             build/
-            dist
             .tmp/
-          if-no-files-found: error
           retention-days: 1
 
   # ===================================================================
