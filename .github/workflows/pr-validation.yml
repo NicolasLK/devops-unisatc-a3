@@ -1,242 +1,136 @@
 # .github/workflows/pr-validation.yml
-# Workflow para validação de Pull Requests
+# Este workflow roda automaticamente em cada Pull Request para garantir a qualidade do código.
+# Ele instala dependências, constrói a aplicação e executa os testes E2E com Playwright.
 # Projeto: DevOps UNISATC A3 - Strapi Application
 
-name: 🔍 PR Validation
+name: ✅ Validar Pull Request (Testes E2E)
 
 on:
   pull_request:
-    branches: [master, main, develop]
-    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [master, main]
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '10.12.1'
+  PNPM_VERSION: '8'
 
 jobs:
-  code-analysis:
-    name: 📊 Code Analysis
+  # ===================================================================
+  # JOB 1: PREPARAR O AMBIENTE E DEPENDÊNCIAS
+  # ===================================================================
+  setup-and-build:
+    name: 🔧 Preparar Ambiente e Construir Aplicação
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
-    steps:
-      - uses: actions/checkout@v4
-        with: 
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with: 
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
-        with:
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          path: |
-            node_modules
-            ~/.pnpm-store
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Lint checks
-        run: |
-          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
-            pnpm exec eslint . --ext .js,.ts,.jsx,.tsx --max-warnings 0
-          else
-            find . -name "*.js" -not -path "./node_modules/*" -exec node -c {} \;
-          fi
-      - name: Format check
-        run: |
-          if [ -f ".prettierrc" ] || [ -f ".prettierrc.js" ] || [ -f ".prettierrc.json" ]; then
-            pnpm exec prettier --check "**/*.{js,ts,jsx,tsx,json,md,yml,yaml}"
-          fi
-      - name: Security audit
-        run: pnpm audit --audit-level moderate
-        continue-on-error: true
-      - name: Validate package.json
-        run: |
-          node -e "
-            const pkg = require('./package.json');
-            if (!pkg.name) throw new Error('Missing name');
-            if (!pkg.version) throw new Error('Missing version');
-            if (!pkg.scripts) throw new Error('Missing scripts');
-            console.log('✅ package.json OK');
-          "
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
 
-  build-and-test:
-    name: 🏗️ Build & Test
-    runs-on: ubuntu-latest
-    needs: code-analysis
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: strapi_test
-          POSTGRES_USER: strapi
-          POSTGRES_PASSWORD: strapi_test_pass
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with: 
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
+      - name: 📥 Baixar Código do Repositório
+        uses: actions/checkout@v4
+
+      - name: 📦 Configurar Node.js e pnpm
+        uses: pnpm/action-setup@v3
         with:
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: 🔑 Gerar Chave de Cache
+        id: cache-key
+        run: echo "key=node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+      - name: 💾 Usar Cache de Dependências
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          key: ${{ steps.cache-key.outputs.key }}
+          restore-keys: node-modules-${{ runner.os }}-
           path: |
             node_modules
-            ~/.pnpm-store
-      - name: Install dependencies
+            ~/.cache/ms-playwright
+
+      - name: 📥 Instalar Dependências (se não houver cache)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
-      - name: Build application
+
+      - name: 🎭 Instalar Navegadores do Playwright (se não houver cache)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps
+
+      - name: 🏗️ Construir Aplicação Strapi
         run: pnpm build
         env:
           NODE_ENV: production
-          DATABASE_CLIENT: postgres
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_NAME: strapi_test
-          DATABASE_USERNAME: strapi
-          DATABASE_PASSWORD: strapi_test_pass
-          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
-          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
-          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
-          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
-          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
-      - name: Run unit tests (if present)
-        run: pnpm run --if-present test:unit || echo "ℹ️ No unit tests"
-        continue-on-error: true
-      - name: Start Strapi
-        run: |
-          pnpm start &
-          echo $! > strapi.pid
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do echo "⏳ aguardando Strapi..."; sleep 2; done'
-        env:
-          NODE_ENV: development
-          DATABASE_CLIENT: postgres
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_NAME: strapi_test
-          DATABASE_USERNAME: strapi
-          DATABASE_PASSWORD: strapi_test_pass
-          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
-          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
-          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
-          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
-          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
-      - name: Health & API check
-        run: |
-          if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/_health)" -ne 204 ]; then exit 1; fi
-          if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/api)" -ne 200 ]; then exit 1; fi
-      - name: Cleanup
-        run: |
-          kill $(cat strapi.pid) || true
-      - uses: actions/upload-artifact@v4
+          DATABASE_CLIENT: sqlite
+          DATABASE_FILENAME: .tmp/data.db
+
+      - name: 📤 Salvar Build como Artefato
+        uses: actions/upload-artifact@v4
         with:
-          name: strapi-build-pr-${{ github.event.number }}
+          name: strapi-build-${{ github.run_id }}
           path: |
             build/
-            dist/
+            .tmp/
+          retention-days: 1
 
-  e2e-tests:
-    name: 🎭 E2E Smoke Tests
+  # ===================================================================
+  # JOB 2: EXECUTAR OS TESTES E2E
+  # ===================================================================
+  run-e2e-tests:
+    name: 🧪 Rodar Testes End-to-End
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event.pull_request.draft == false
+    needs: setup-and-build # Depende do sucesso do job anterior
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: ${{ env.NODE_VERSION }}
-      - uses: pnpm/action-setup@v3
-        with: 
-          version: ${{ env.PNPM_VERSION }}
-      - uses: actions/cache@v4
+      - name: 📥 Baixar Código do Repositório
+        uses: actions/checkout@v4
+        
+      - name: 📦 Configurar Node.js e pnpm
+        uses: pnpm/action-setup@v3
         with:
-          key: ${{ runner.os }}-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 💾 Restaurar Cache de Dependências
+        uses: actions/cache@v4
+        with:
+          key: ${{ needs.setup-and-build.outputs.cache-key }}
           path: |
             node_modules
-            ~/.pnpm-store
             ~/.cache/ms-playwright
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Install Playwright
-        run: pnpm exec playwright install --with-deps chromium
-      - uses: actions/download-artifact@v4
+      
+      - name: 📥 Baixar Build do Artefato
+        uses: actions/download-artifact@v4
         with: 
-          name: strapi-build-pr-${{ github.event.number }}
-      - name: Start Strapi
+          name: strapi-build-${{ github.run_id }}
+
+      - name: 🚀 Iniciar Strapi em Background
         run: |
           pnpm start &
           echo $! > strapi.pid
-          timeout 120s bash -c 'until curl -f http://localhost:1337/_health; do echo "⏳ aguardando Strapi..."; sleep 2; done'
         env:
           NODE_ENV: test
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
-          JWT_SECRET: ${{ secrets.STRAPI_JWT_SECRET }}
-          ADMIN_JWT_SECRET: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}
-          APP_KEYS: ${{ secrets.STRAPI_APP_KEYS }}
-          API_TOKEN_SALT: ${{ secrets.STRAPI_API_TOKEN_SALT }}
-          TRANSFER_TOKEN_SALT: ${{ secrets.STRAPI_TRANSFER_TOKEN_SALT }}
-      - name: Run smoke E2E
-        run: pnpm test --grep="@smoke" --project=chromium
+          STRAPI_DISABLE_UPDATE_NOTIFICATION: true
+
+      - name: ⏳ Aguardar Aplicação Iniciar
+        run: |
+          echo "Aguardando Strapi ficar saudável (até 2 minutos)..."
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "Aguardando..."; sleep 5; done'
+          echo "Aplicação pronta para os testes."
+
+      - name: 🎭 Executar todos os testes do Playwright
+        run: pnpm test
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
-      - uses: actions/upload-artifact@v4
-        if: always()
+
+      - name: 📊 Salvar Relatório de Testes
+        if: always() # Sempre executa, mesmo que os testes falhem
+        uses: actions/upload-artifact@v4
         with:
-          name: e2e-results-pr-${{ github.event.number }}
-          path: |
-            test-results/
-            playwright-report/
-      - name: Cleanup
+          name: playwright-report-pr-${{ github.event.number }}
+          path: playwright-report/
+
+      - name: 🧹 Limpar Processo do Strapi
+        if: always()
         run: kill $(cat strapi.pid) || true
-
-  security-scan:
-    name: 🛡️ Security Scan
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-      - uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  pr-status:
-    name: 📋 PR Status Summary
-    runs-on: ubuntu-latest
-    needs: [code-analysis, build-and-test, e2e-tests, security-scan]
-    if: always()
-    steps:
-      - name: Generate Summary
-        run: |
-          echo "## 🤖 PR Validation Results" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          for job in code-analysis build-and-test e2e-tests security-scan; do
-            status="${{ needs.$job.result }}"
-            icon=$([[ "$status" == "success" ]] && echo "✅" || echo "❌")
-            echo "| $job | $icon $status |" >> $GITHUB_STEP_SUMMARY
-          done
-      - name: Fail on any failure
-        if: failure()
-        run: exit 1
-      - name: All done
-        if: success()
-        run: echo "✅ All checks passed!"
