@@ -72,6 +72,8 @@ jobs:
           docker build -t "$IMAGE_FULL_NAME" --file ${{ env.DOCKERFILE_PATH }} .
 
       - name: 🧪 Test Docker image (Smoke Test)
+        id: smoke_test
+        continue-on-error: true
         run: |
           echo "🧪 Iniciando teste de fumaça para a imagem: ${{ env.IMAGE_FULL_NAME }}"
           docker run -d --name strapi-test \
@@ -90,11 +92,17 @@ jobs:
           timeout 90s bash -c 'until curl -fs http://localhost:1337/admin/health/strapi; do echo "Aguardando..."; sleep 5; done'
           echo "✅ Teste de fumaça concluído com sucesso."
 
+      - name: 🔍 Debug on Smoke Test Failure
+        if: steps.smoke_test.outcome == 'failure'
+        run: |
+          echo "❌ Teste de fumaça falhou. Exibindo logs do contêiner..."
+          docker logs strapi-test
+          exit 1  # Força a falha do workflow
+
       - name: 🧹 Clean up test container
         if: always()
         run: |
           echo "🧹 Limpando contêiner de teste..."
-          docker logs strapi-test || true
           docker stop strapi-test || true
           docker rm strapi-test || true
       
