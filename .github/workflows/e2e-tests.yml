@@ -70,14 +70,21 @@ jobs:
           echo $! > strapi.pid
         env:
           NODE_ENV: test
+          HOST: 0.0.0.0
+          PORT: 1337
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
           STRAPI_DISABLE_UPDATE_NOTIFICATION: true
+          JWT_SECRET: "dummy"
+          ADMIN_JWT_SECRET: "dummy"
+          APP_KEYS: "dummy"
+          API_TOKEN_SALT: "dummy"
+          TRANSFER_TOKEN_SALT: "dummy"
 
       - name: ⏳ Wait for Strapi to be Ready
         run: |
           echo "Aguardando Strapi ficar saudável..."
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/_health; do echo "⏳ Aguardando..."; sleep 5; done'
+          timeout 120s bash -c 'until curl -fs http://localhost:1337/admin/health/strapi; do echo "⏳ Aguardando..."; sleep 5; done'
           echo "✅ Strapi está pronto!"
 
       - name: 🎭 Run E2E Tests
