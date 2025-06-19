@@ -20,7 +20,7 @@
     "test:simple-only": "playwright test simple.test.js --config=playwright.config.minimal.js",
     "test:debug": "playwright test --config=playwright.config.minimal.js --debug --headed",
     "test:report": "playwright show-report",
-    "check:strapi": "curl http://127.0.0.1:1337 || echo 'Strapi offline'",
+    "check:strapi": "curl http://localhost:1337 || echo 'Strapi offline'",
     "test:docker": "docker run --rm -v $(pwd):/workspace -w /workspace mcr.microsoft.com/playwright:focal npm run test",
     "setup": "node scripts/setup-test-data.js",
     "cleanup": "node scripts/cleanup-test-data.js"
