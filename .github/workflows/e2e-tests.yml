@@ -49,6 +49,9 @@ jobs:
       - name: 📥 Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: 🔨 Rebuild better-sqlite3 bindings
+        run: pnpm exec npm rebuild better-sqlite3
+
       - name: 🎭 Install Playwright Browsers
         run: pnpm exec playwright install --with-deps
 
