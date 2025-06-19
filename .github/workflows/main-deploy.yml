@@ -26,13 +26,13 @@ jobs:
   # JOB 1: CONSTRUIR E PUBLICAR A IMAGEM DOCKER
   # ===================================================================
   build-and-push:
-    name: 🐳 Build and Push Docker Image
+    name: 🐳 Construir e Publicar Imagem Docker
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     outputs:
-      image_name: ${{ steps.build_image.outputs.image_name }}
+      image_name: ${{ steps.build_and_push_image.outputs.image_name }}
     steps:
       - name: 📥 Checkout do Código
         uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: 🏗️ Construir e Enviar Imagem
-        id: build_and_push_image
+        id: build_and_push_image # O ID correto do passo
         run: |
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           IMAGE_TAG=${{ github.sha }}
