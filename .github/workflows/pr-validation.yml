@@ -135,9 +135,9 @@ jobs:
         run: |
           if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/_health)" -ne 204 ]; then exit 1; fi
           if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1337/api)" -ne 200 ]; then exit 1; fi
-      - - name: Cleanup
-          run: |
-            kill $(cat strapi.pid) || true
+      - name: Cleanup
+        run: |
+          kill $(cat strapi.pid) || true
       - uses: actions/upload-artifact@v4
         with:
           name: strapi-build-pr-${{ github.event.number }}

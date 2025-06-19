@@ -49,11 +49,9 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           IMAGE_TAG=${{ github.sha }}
           IMAGE_NAME="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REPO }}/${{ env.APP_NAME }}:${IMAGE_TAG}"
-          
           echo "Construindo e enviando a imagem: $IMAGE_NAME"
-          docker build -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
-          
+          docker build -t "$IMAGE_NAME" .
+          docker push "$IMAGE_NAME"
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
 
   # ===================================================================
