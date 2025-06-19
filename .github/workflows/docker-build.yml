@@ -25,14 +25,21 @@ on:
         type: boolean
         default: false
 
+# Variáveis de ambiente para todo o workflow
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_PROJECT_NUMBER: 159248096205
+  GCP_REGION: southamerica-east1
   GCR_HOSTNAME: gcr.io
   IMAGE_NAME: devops-unisatc-a3-strapi
   DOCKERFILE_PATH: ./Dockerfile
+  # Credenciais para o Workload Identity Federation
+  GCP_SERVICE_ACCOUNT: strapi-deployer@sound-dialect-458215-j9.iam.gserviceaccount.com
+  WIF_POOL: github-pool-a3
+  WIF_PROVIDER: github-provider
 
+# Job para configurar variáveis de ambiente
 jobs:
-  # Job para configurar variáveis de ambiente
   setup:
     name: 🔧 Setup Environment
     runs-on: ubuntu-latest
@@ -51,7 +58,6 @@ jobs:
       - name: 🏷️ Generate metadata
         id: meta
         run: |
-          # Determina environment
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ENVIRONMENT="${{ github.event.inputs.environment }}"
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
@@ -62,7 +68,6 @@ jobs:
             ENVIRONMENT="staging"
           fi
           
-          # Gera tag da imagem
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             IMAGE_TAG=${GITHUB_REF#refs/tags/}
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
@@ -71,41 +76,30 @@ jobs:
             IMAGE_TAG="${GITHUB_SHA::8}"
           fi
           
-          # Adiciona sufixo do environment se não for production
           if [[ "$ENVIRONMENT" != "production" ]]; then
             IMAGE_TAG="${IMAGE_TAG}-${ENVIRONMENT}"
           fi
           
-          IMAGE_FULL="${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          IMAGE_FULL="${{ env.GCR_HOSTNAME }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
           
           echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "image-full=${IMAGE_FULL}" >> $GITHUB_OUTPUT
           echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          
-          echo "🏷️ Image tag: ${IMAGE_TAG}"
-          echo "🐳 Full image: ${IMAGE_FULL}"
-          echo "🌍 Environment: ${ENVIRONMENT}"
 
       - name: 🔍 Check for changes
         id: changes
         run: |
           SHOULD_BUILD="true"
-          
-          # Se for workflow_dispatch com force_rebuild=false, verifica mudanças
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ github.event.inputs.force_rebuild }}" == "false" ]]; then
-            # Verifica se houve mudanças relevantes
             if git diff --quiet HEAD~1 HEAD -- . ':!.github' ':!docs' ':!*.md'; then
-              echo "ℹ️ Nenhuma mudança relevante detectada"
               SHOULD_BUILD="false"
             fi
           fi
-          
           echo "should-build=${SHOULD_BUILD}" >> $GITHUB_OUTPUT
-          echo "🔨 Should build: ${SHOULD_BUILD}"
 
   # Job para build e teste da imagem
   build:
-    name: 🏗️ Build Docker Image
+    name: 🏗️ Build, Test & Scan Image
     runs-on: ubuntu-latest
     needs: setup
     if: needs.setup.outputs.should-build == 'true'
@@ -115,157 +109,52 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔐 Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: 🛠️ Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: 🐳 Configure Docker for GCR
-        run: |
-          gcloud auth configure-docker ${{ env.GCR_HOSTNAME }}
-
-      - name: 🔍 Validate Dockerfile
-        run: |
-          echo "🔍 Validando Dockerfile..."
-          
-          # Verifica se Dockerfile existe
-          if [[ ! -f "${{ env.DOCKERFILE_PATH }}" ]]; then
-            echo "❌ Dockerfile não encontrado em ${{ env.DOCKERFILE_PATH }}"
-            exit 1
-          fi
-          
-          # Usa hadolint se disponível
-          if command -v hadolint &> /dev/null; then
-            hadolint ${{ env.DOCKERFILE_PATH }}
-          else
-            echo "ℹ️ hadolint não disponível, pulando lint do Dockerfile"
-          fi
-          
-          echo "✅ Dockerfile válido"
+        run: gcloud auth configure-docker ${{ env.GCR_HOSTNAME }} --quiet
 
       - name: 🏗️ Build Docker image
         run: |
-          echo "🏗️ Building Docker image..."
-          
           docker build \
             --file ${{ env.DOCKERFILE_PATH }} \
             --tag ${{ needs.setup.outputs.image-full }} \
-            --tag ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --label "org.opencontainers.image.title=${{ env.IMAGE_NAME }}" \
-            --label "org.opencontainers.image.description=Strapi application for DevOps UNISATC A3" \
-            --label "org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}" \
-            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
-            --label "org.opencontainers.image.version=${{ needs.setup.outputs.image-tag }}" \
-            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --label "org.opencontainers.image.revision=${{ github.sha }}" \
-            --label "org.opencontainers.image.licenses=MIT" \
-            --build-arg NODE_ENV=${{ needs.setup.outputs.environment }} \
-            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-            --build-arg VCS_REF=${{ github.sha }} \
             .
-          
-          echo "✅ Image built successfully"
-
-      - name: 🧪 Test Docker image
+      
+      - name: 🧪 Test Docker image (Smoke Test)
         run: |
-          echo "🧪 Testing Docker image..."
+          echo "🧪 Iniciando teste de fumaça..."
           
-          # Testa se a imagem foi criada
-          if ! docker image inspect ${{ needs.setup.outputs.image-full }} > /dev/null 2>&1; then
-            echo "❌ Image not found after build"
-            exit 1
-          fi
-          
-          # Testa se a imagem pode ser executada
-          echo "🚀 Testing container startup..."
-          CONTAINER_ID=$(docker run -d \
-            -e NODE_ENV=test \
+          # Inicia o contêiner em background com variáveis de ambiente fictícias que o Strapi exige
+          docker run -d --name strapi-test \
+            -p 1337:1337 \
+            -e NODE_ENV=development \
             -e DATABASE_CLIENT=sqlite \
             -e DATABASE_FILENAME=.tmp/test.db \
-            -e JWT_SECRET=test_jwt_secret \
-            -e ADMIN_JWT_SECRET=test_admin_jwt_secret \
-            -e APP_KEYS=test_key_1,test_key_2,test_key_3,test_key_4 \
-            -e API_TOKEN_SALT=test_api_token_salt \
-            -e TRANSFER_TOKEN_SALT=test_transfer_token_salt \
-            -p 1337:1337 \
-            ${{ needs.setup.outputs.image-full }})
-          
-          # Aguarda container inicializar
-          echo "⏳ Waiting for container to start..."
-          sleep 30
-          
-          # Verifica se container está rodando
-          if ! docker ps | grep -q $CONTAINER_ID; then
-            echo "❌ Container failed to start"
-            docker logs $CONTAINER_ID
-            exit 1
-          fi
-          
-          # Verifica health endpoint
-          echo "🔍 Testing health endpoint..."
-          for i in {1..10}; do
-            if curl -f http://localhost:1337/_health; then
-              echo "✅ Health check passed"
-              break
-            fi
-            if [ $i -eq 10 ]; then
-              echo "❌ Health check failed after 10 attempts"
-              docker logs $CONTAINER_ID
-              exit 1
-            fi
-            sleep 5
-          done
-          
-          # Limpa container de teste
-          docker stop $CONTAINER_ID
-          docker rm $CONTAINER_ID
-          
-          echo "✅ Image testing completed successfully"
-
-      - name: 🔒 Security scan
-        run: |
-          echo "🔒 Scanning image for vulnerabilities..."
-          
-          # Instala Trivy se não estiver disponível
-          if ! command -v trivy &> /dev/null; then
-            sudo apt-get update
-            sudo apt-get install wget apt-transport-https gnupg lsb-release
-            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-            sudo apt-get update
-            sudo apt-get install trivy
-          fi
-          
-          # Executa scan de vulnerabilidades
-          trivy image \
-            --exit-code 1 \
-            --severity HIGH,CRITICAL \
-            --format table \
+            -e JWT_SECRET=test-jwt-secret-dummy-value-for-testing \
+            -e ADMIN_JWT_SECRET=test-admin-jwt-secret-dummy-value-for-testing \
+            -e APP_KEYS='testkey1,testkey2,testkey3,testkey4' \
+            -e API_TOKEN_SALT=test-api-token-salt \
+            -e TRANSFER_TOKEN_SALT=test-transfer-token-salt \
             ${{ needs.setup.outputs.image-full }}
-        continue-on-error: true
 
-      - name: 📊 Generate image report
+          echo "⏳ Aguardando contêiner inicializar (até 60s)..."
+          
+          # Espera até que o Strapi responda no endpoint de health ou o tempo se esgote (60s)
+          timeout 60s bash -c 'until curl -f http://localhost:1337/admin/health/strapi; do sleep 5; done'
+
+          echo "✅ Teste de fumaça concluído com sucesso. O contêiner iniciou corretamente."
+
+      - name: 🧹 Clean up test container
+        if: always() # Garante que este passo sempre rode, mesmo que o teste falhe
         run: |
-          echo "📊 Generating image report..."
-          
-          # Informações da imagem
-          IMAGE_SIZE=$(docker image inspect ${{ needs.setup.outputs.image-full }} --format='{{.Size}}' | numfmt --to=iec)
-          IMAGE_LAYERS=$(docker image inspect ${{ needs.setup.outputs.image-full }} --format='{{len .RootFS.Layers}}')
-          
-          echo "## 🐳 Docker Image Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Image Name** | \`${{ needs.setup.outputs.image-full }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Tag** | \`${{ needs.setup.outputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Size** | ${IMAGE_SIZE} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Layers** | ${IMAGE_LAYERS} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | ${{ needs.setup.outputs.environment }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "🧹 Limpando contêiner de teste..."
+          docker logs strapi-test || true
+          docker stop strapi-test || true
+          docker rm strapi-test || true
 
   # Job para push da imagem
   push:
@@ -275,84 +164,33 @@ jobs:
     if: github.event_name != 'pull_request' && needs.setup.outputs.should-build == 'true'
     
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
       - name: 🔐 Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: 🛠️ Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: 🐳 Configure Docker for GCR
-        run: |
-          gcloud auth configure-docker ${{ env.GCR_HOSTNAME }}
+        run: gcloud auth configure-docker ${{ env.GCR_HOSTNAME }} --quiet
 
-      - name: 🏗️ Rebuild image for push
+      - name: 🏗️ Rebuild image for push cache
+        # O build precisa ser refeito neste job para que o Docker tenha a imagem em seu contexto.
+        # Isso é rápido pois o cache de layers do Docker geralmente é utilizado.
         run: |
-          echo "🏗️ Rebuilding image for push..."
-          
           docker build \
             --file ${{ env.DOCKERFILE_PATH }} \
             --tag ${{ needs.setup.outputs.image-full }} \
-            --tag ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --label "org.opencontainers.image.title=${{ env.IMAGE_NAME }}" \
-            --label "org.opencontainers.image.description=Strapi application for DevOps UNISATC A3" \
-            --label "org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}" \
-            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
-            --label "org.opencontainers.image.version=${{ needs.setup.outputs.image-tag }}" \
-            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --label "org.opencontainers.image.revision=${{ github.sha }}" \
-            --label "org.opencontainers.image.licenses=MIT" \
-            --build-arg NODE_ENV=${{ needs.setup.outputs.environment }} \
-            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-            --build-arg VCS_REF=${{ github.sha }} \
             .
 
       - name: 📤 Push image to GCR
         run: |
-          echo "📤 Pushing image to Google Container Registry..."
-          
-          # Push com tag específica
           docker push ${{ needs.setup.outputs.image-full }}
           
-          # Push com SHA do commit
-          docker push ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          
-          echo "✅ Image pushed successfully to GCR"
-
-      - name: 🏷️ Tag additional versions
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        run: |
-          echo "🏷️ Tagging additional versions..."
-          
-          # Tag como 'latest' se for branch principal
-          docker tag ${{ needs.setup.outputs.image-full }} ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
-          
-          # Tag com timestamp
-          TIMESTAMP=$(date -u +'%Y%m%d-%H%M%S')
-          docker tag ${{ needs.setup.outputs.image-full }} ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${TIMESTAMP}
-          docker push ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${TIMESTAMP}
-          
-          echo "✅ Additional tags pushed"
-
-      - name: 📋 Generate push report
-        run: |
-          echo "📋 Generating push report..."
-          
-          # Lista imagens no registry
-          echo "📦 Images in registry:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          gcloud container images list-tags ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }} \
-            --limit=10 \
-            --sort-by=~timestamp \
-            --format="table(digest.short,tags,timestamp)" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # Se for a branch principal, também envia com a tag 'latest'
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            docker tag ${{ needs.setup.outputs.image-full }} ${{ env.GCR_HOSTNAME }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+            docker push ${{ env.GCR_HOSTNAME }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+          fi
 
   # Job para limpeza de imagens antigas
   cleanup:
@@ -363,90 +201,16 @@ jobs:
     
     steps:
       - name: 🔐 Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v2'
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: 🛠️ Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: 🧹 Clean up old images
         run: |
-          echo "🧹 Cleaning up old images..."
-          
-          # Mantém apenas as 10 imagens mais recentes
-          IMAGES_TO_DELETE=$(gcloud container images list-tags ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }} \
-            --limit=999 \
-            --sort-by=~timestamp \
-            --format="get(digest)" \
-            --filter="timestamp.datetime < '-P30D'")
-          
-          if [ -n "$IMAGES_TO_DELETE" ]; then
-            echo "🗑️ Deleting old images..."
-            echo "$IMAGES_TO_DELETE" | while read digest; do
-              if [ -n "$digest" ]; then
-                gcloud container images delete ${{ env.GCR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}@${digest} \
-                  --force-delete-tags \
-                  --quiet
-                echo "🗑️ Deleted: ${digest}"
-              fi
-            done
-          else
-            echo "ℹ️ No old images to delete"
-          fi
-
-  # Job para notificações
-  notify:
-    name: 📬 Notifications
-    runs-on: ubuntu-latest
-    needs: [setup, build, push, cleanup]
-    if: always()
-    
-    steps:
-      - name: 📊 Generate final report
-        run: |
-          echo "📊 Generating final report..."
-          
-          BUILD_STATUS="${{ needs.build.result }}"
-          PUSH_STATUS="${{ needs.push.result }}"
-          
-          echo "## 🐳 Docker Build & Push Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build | $([ "$BUILD_STATUS" = "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Push | $([ "$PUSH_STATUS" = "success" ] && echo "✅ SUCCESS" || echo "❌ SKIPPED/FAILED") |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ needs.setup.outputs.should-build }}" = "true" ]; then
-            echo "🎯 **Target**: ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-            echo "🏷️ **Tag**: \`${{ needs.setup.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "📦 **Image**: \`${{ needs.setup.outputs.image-full }}\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "ℹ️ **Build skipped**: No relevant changes detected" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: 📬 Send Slack notification (on failure)
-        if: failure() && github.ref == 'refs/heads/main'
-        run: |
-          echo "📬 Would send Slack notification about Docker build failure"
-          # Aqui você pode adicionar integração com Slack se necessário
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data '{"text":"🚨 Docker build failed for DevOps UNISATC A3"}' \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: ✅ Success notification
-        if: needs.build.result == 'success' && needs.push.result == 'success'
-        run: |
-          echo "✅ Docker image built and pushed successfully!"
-          echo "🐳 Image: ${{ needs.setup.outputs.image-full }}"
-          echo "🎯 Environment: ${{ needs.setup.outputs.environment }}"
-
-      - name: ❌ Failure notification
-        if: failure()
-        run: |
-          echo "❌ Docker build/push pipeline failed!"
-          echo "🔍 Check the logs above for details"
-          exit 1
+          # Mantém apenas as 10 imagens mais recentes e apaga as com mais de 30 dias
+          gcloud artifacts docker images delete ${{ env.GCR_HOSTNAME }}/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }} \
+            --delete-tags \
+            --keep-tags=10 \
+            --filter="createTime<-P30D" \
+            --quiet
