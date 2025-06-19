@@ -1,6 +1,5 @@
 # .github/workflows/pr-validation.yml
 # Este workflow roda automaticamente em cada Pull Request para garantir a qualidade do código.
-# Ele instala dependências, constrói a aplicação e executa os testes E2E com Playwright.
 # Projeto: DevOps UNISATC A3 - Strapi Application
 
 name: ✅ Validar Pull Request (Testes E2E)
@@ -20,134 +19,131 @@ env:
   PNPM_VERSION: '9.4.0'
 
 jobs:
-  # ===================================================================
-  # JOB 1: PREPARAR O AMBIENTE E DEPENDÊNCIAS
-  # ===================================================================
-  setup-and-build:
-    name: 🔧 Preparar Ambiente e Construir Aplicação
+  # Job único e simplificado para validação de PR
+  validate-pr:
+    name: 🧪 Validar Pull Request
     runs-on: ubuntu-latest
-    outputs:
-      cache-key: ${{ steps.cache-key.outputs.key }}
 
     steps:
-      - name: 📥 Baixar Código do Repositório
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 📦 Configurar Node.js e pnpm
-        uses: pnpm/action-setup@v3
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          version: ${{ env.PNPM_VERSION }}
-      
-      - name: 🔑 Gerar Chave de Cache
-        id: cache-key
-        run: echo "key=node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
 
-      - name: 💾 Usar Cache de Dependências
-        id: cache-deps
+      - name: 🔧 Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 💾 Cache Dependencies
         uses: actions/cache@v4
         with:
-          key: ${{ steps.cache-key.outputs.key }}
+          key: node-modules-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: node-modules-${{ runner.os }}-
           path: |
             node_modules
             ~/.cache/ms-playwright
 
-      - name: 🛠️ Instalar Ferramentas de Build
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
-
-      - name: 📥 Instalar Dependências (se não houver cache)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+      - name: 📥 Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: 🎭 Instalar Navegadores do Playwright (se não houver cache)
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+      - name: 🎭 Install Playwright Browsers
         run: pnpm exec playwright install --with-deps
 
-      - name: 🏗️ Construir Aplicação Strapi
+      - name: 📁 Create Required Directories
+        run: |
+          mkdir -p build
+          mkdir -p .tmp
+          echo "Build directory created" > build/placeholder.txt
+
+      - name: 🏗️ Build Strapi Application
         run: pnpm build
         env:
           NODE_ENV: production
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/data.db
 
-      - name: 📤 Salvar Build como Artefato
-        uses: actions/upload-artifact@v4
-        with:
-          name: strapi-build-${{ github.run_id }}
-          path: |
-            build/
-            .tmp/
-          retention-days: 1
-
-  # ===================================================================
-  # JOB 2: EXECUTAR OS TESTES E2E
-  # ===================================================================
-  run-e2e-tests:
-    name: 🧪 Rodar Testes End-to-End
-    runs-on: ubuntu-latest
-    needs: setup-and-build # Depende do sucesso do job anterior
-
-    steps:
-      - name: 📥 Baixar Código do Repositório
-        uses: actions/checkout@v4
-        
-      - name: 📦 Configurar Node.js e pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: 💾 Restaurar Cache de Dependências
-        uses: actions/cache@v4
-        with:
-          key: ${{ needs.setup-and-build.outputs.cache-key }}
-          path: |
-            node_modules
-            ~/.cache/ms-playwright
-      
-      - name: 📥 Baixar Build do Artefato
-        uses: actions/download-artifact@v4
-        with: 
-          name: strapi-build-${{ github.run_id }}
-
-      - name: 🚀 Iniciar Strapi em Background
+      - name: 🚀 Start Strapi in Background
         run: |
-          pnpm start &
+          echo "=== Iniciando Strapi ==="
+          pnpm start > strapi.log 2>&1 &
           echo $! > strapi.pid
+          echo "Strapi iniciado com PID: $(cat strapi.pid)"
         env:
-          NODE_ENV: test
+          NODE_ENV: development
           HOST: 0.0.0.0
           PORT: 1337
           DATABASE_CLIENT: sqlite
           DATABASE_FILENAME: .tmp/test-data.db
           STRAPI_DISABLE_UPDATE_NOTIFICATION: true
-          JWT_SECRET: "dummy"
-          ADMIN_JWT_SECRET: "dummy"
-          APP_KEYS: "dummy"
-          API_TOKEN_SALT: "dummy"
-          TRANSFER_TOKEN_SALT: "dummy"
+          JWT_SECRET: "test-jwt-secret-for-validation"
+          ADMIN_JWT_SECRET: "test-admin-jwt-secret-for-validation"
+          APP_KEYS: "testkey1,testkey2,testkey3,testkey4"
+          API_TOKEN_SALT: "test-api-token-salt"
+          TRANSFER_TOKEN_SALT: "test-transfer-token-salt"
 
-      - name: ⏳ Aguardar Aplicação Iniciar
+      - name: 🕒 Wait for Strapi Initialization
         run: |
-          echo "Aguardando Strapi ficar saudável (até 2 minutos)..."
-          timeout 120s bash -c 'until curl -fs http://localhost:1337/admin/health/strapi; do echo "Aguardando..."; sleep 5; done'
-          echo "Aplicação pronta para os testes."
+          echo "Aguardando 30 segundos para Strapi inicializar..."
+          sleep 30
 
-      - name: 🎭 Executar todos os testes do Playwright
-        run: pnpm test
+      - name: ⏳ Wait for Strapi to be Ready
+        run: |
+          echo "Verificando se Strapi está disponível..."
+          
+          # Tenta conectar na porta principal
+          timeout 120s bash -c 'until curl -s http://localhost:1337 > /dev/null 2>&1; do echo "⏳ Aguardando porta 1337..."; sleep 5; done' || {
+            echo "❌ Timeout aguardando Strapi. Mostrando logs:"
+            tail -50 strapi.log || echo "Sem logs disponíveis"
+            exit 1
+          }
+          
+          echo "✅ Strapi está respondendo!"
+
+      - name: 🔍 Debug Strapi Status
+        run: |
+          echo "=== Status da aplicação ==="
+          curl -s http://localhost:1337 | head -100 || echo "Falha ao acessar /"
+          echo ""
+          echo "=== Verificando portas ==="
+          netstat -tulpn | grep :1337 || echo "Porta 1337 não encontrada"
+
+      - name: 🎭 Run E2E Tests
+        run: |
+          echo "=== Executando testes E2E ==="
+          pnpm test || {
+            echo "❌ Testes falharam. Mostrando logs do Strapi:"
+            tail -100 strapi.log || echo "Sem logs disponíveis"
+            exit 1
+          }
         env:
           CI: true
           STRAPI_URL: http://localhost:1337
 
-      - name: 📊 Salvar Relatório de Testes
-        if: always() # Sempre executa, mesmo que os testes falhem
+      - name: 📊 Upload Test Results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-pr-${{ github.event.number }}
-          path: playwright-report/
+          name: test-results-pr-${{ github.event.number || github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+            strapi.log
+          retention-days: 7
 
-      - name: 🧹 Limpar Processo do Strapi
+      - name: 🧹 Cleanup Strapi Process
         if: always()
-        run: kill $(cat strapi.pid) || true
+        run: |
+          echo "=== Limpeza final ==="
+          if [ -f strapi.pid ]; then
+            PID=$(cat strapi.pid)
+            echo "Finalizando processo Strapi (PID: $PID)"
+            kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || echo "Processo já finalizado"
+            rm strapi.pid
+          fi
+          
+          # Finaliza qualquer processo na porta 1337
+          lsof -ti:1337 | xargs kill -9 2>/dev/null || echo "Nenhum processo na porta 1337"
