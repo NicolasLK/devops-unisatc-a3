@@ -1,4 +1,6 @@
-name: 🚀 CI/CD Strapi A3
+# .github/workflows/main-deploy.yml
+# Workflow que constrói a imagem Docker e faz o deploy no GKE via Terraform.
+name: 🚀 CI/CD - Strapi A3
 
 on:
   push:
@@ -6,16 +8,23 @@ on:
       - master
 
 env:
+  # Configurações globais
+  GCP_REGION: southamerica-east1
+  ARTIFACT_HOSTNAME: southamerica-east1-docker.pkg.dev
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_PROJECT_NUMBER: 159248096205
-  GCP_REGION: southamerica-east1
   GCP_ARTIFACT_REPO: devops-repo
   APP_NAME: strapi-app
+  
+  # Credenciais para o Workload Identity Federation
   GCP_SERVICE_ACCOUNT: strapi-deployer@sound-dialect-458215-j9.iam.gserviceaccount.com
   WIF_POOL: github-pool-a3
   WIF_PROVIDER: github-provider
 
 jobs:
+  # ===================================================================
+  # JOB 1: CONSTRUIR E PUBLICAR A IMAGEM DOCKER
+  # ===================================================================
   build-and-push:
     name: 🐳 Build and Push Docker Image
     runs-on: ubuntu-latest
@@ -25,40 +34,58 @@ jobs:
     outputs:
       image_name: ${{ steps.build_image.outputs.image_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
+      - name: 📥 Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: 🔐 Autenticação no Google Cloud
+        uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Build and Push Image
-        id: build_image
+
+      - name: 🏗️ Construir e Enviar Imagem
+        id: build_and_push_image
         run: |
-          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           IMAGE_TAG=${{ github.sha }}
           IMAGE_NAME="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REPO }}/${{ env.APP_NAME }}:${IMAGE_TAG}"
+          
+          echo "Construindo e enviando a imagem: $IMAGE_NAME"
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
+          
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
 
+  # ===================================================================
+  # JOB 2: FAZER O DEPLOY DA INFRAESTRUTURA COM TERRAFORM
+  # ===================================================================
   deploy:
-    name: Deploy to GKE with Terraform
+    name: ☁️ Deploy no GKE com Terraform
     runs-on: ubuntu-latest
     needs: build-and-push
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
+      - name: 📥 Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: 🔐 Autenticação no Google Cloud
+        uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: "projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ env.WIF_POOL }}/providers/${{ env.WIF_PROVIDER }}"
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - uses: hashicorp/setup-terraform@v3
-      - name: Terraform Init
+
+      - name: 🛠️ Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 🌍 Terraform Init
         run: terraform init
         working-directory: ./terraform
-      - name: Terraform Apply
+
+      - name: 🏗️ Terraform Apply
         env:
+          # Injeta os segredos do repositório no Terraform
           TF_VAR_app_keys: ${{ secrets.STRAPI_APP_KEYS }}
           TF_VAR_api_token_salt: ${{ secrets.STRAPI_API_TOKEN_SALT }}
           TF_VAR_admin_jwt_secret: ${{ secrets.STRAPI_ADMIN_JWT_SECRET }}

@@ -170,7 +170,8 @@ jobs:
       - name: Install Playwright
         run: pnpm exec playwright install --with-deps chromium
       - uses: actions/download-artifact@v4
-        with: name: strapi-build-pr-${{ github.event.number }}
+        with: 
+          name: strapi-build-pr-${{ github.event.number }}
       - name: Start Strapi
         run: |
           pnpm start &
