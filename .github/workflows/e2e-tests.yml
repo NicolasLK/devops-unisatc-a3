@@ -53,7 +53,7 @@ jobs:
             ~/.cache/ms-playwright
       - name: Install deps if cache miss
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Install Playwright browsers
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps
@@ -136,9 +136,9 @@ jobs:
         if: always()
         with:
           name: smoke-test-results
-          path:
-            - test-results/
-            - playwright-report/
+          path: |
+            test-results/
+            playwright-report/
       - name: 🧹 Cleanup Strapi
         if: always()
         run: kill $(cat strapi.pid) || true
@@ -163,9 +163,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           key: ${{ needs.setup.outputs.cache-key }}
-          path:
-            - node_modules
-            - ~/.cache/ms-playwright
+          path: |
+            node_modules
+            ~/.cache/ms-playwright
       - uses: actions/download-artifact@v4
         with:
           name: strapi-build
@@ -189,9 +189,9 @@ jobs:
         if: always()
         with:
           name: admin-test-results-${{ matrix.browser }}
-          path:
-            - test-results/
-            - playwright-report/
+          path: |
+            test-results/
+            playwright-report/
       - name: 🧹 Cleanup Strapi
         if: always()
         run: kill $(cat strapi.pid) || true
@@ -213,9 +213,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           key: ${{ needs.setup.outputs.cache-key }}
-          path:
-            - node_modules
-            - ~/.cache/ms-playwright
+          path: |
+            node_modules
+            ~/.cache/ms-playwright
       - uses: actions/download-artifact@v4
         with:
           name: strapi-build
@@ -240,9 +240,9 @@ jobs:
         if: always()
         with:
           name: api-test-results
-          path:
-            - test-results/
-            - playwright-report/
+          path: |
+            test-results/
+            playwright-report/
       - name: 🧹 Cleanup Strapi
         if: always()
         run: kill $(cat strapi.pid) || true
@@ -264,9 +264,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           key: ${{ needs.setup.outputs.cache-key }}
-          path:
-            - node_modules
-            - ~/.cache/ms-playwright
+          path: |
+            node_modules
+            ~/.cache/ms-playwright
       - uses: actions/download-artifact@v4
         with:
           name: strapi-build
@@ -290,9 +290,9 @@ jobs:
         if: always()
         with:
           name: integration-test-results
-          path:
-            - test-results/
-            - playwright-report/
+          path: |
+            test-results/
+            playwright-report/
       - name: 🧹 Cleanup Strapi
         if: always()
         run: kill $(cat strapi.pid) || true
@@ -314,8 +314,7 @@ jobs:
         id: summary
         run: |
           SUMMARY_BODY=$(cat <<'EOF'
-          # � E2E Test Results Summary
-
+          # 🎭 E2E Test Results Summary
           ## 📈 Test Results
           | Test Suite | Status |
           | :--- | :--- |
@@ -323,7 +322,6 @@ jobs:
           | 👑 Admin Tests | ${{ needs.admin-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
           | 🔌 API Tests | ${{ needs.api-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
           | 🔗 Integration Tests | ${{ needs.integration-tests.result == 'success' && '✅ PASSED' || '❌ FAILED' }} |
-
           ---
           *Workflow: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*
           EOF
@@ -331,7 +329,6 @@ jobs:
           echo "summary<<EOF" >> $GITHUB_OUTPUT
           echo "$SUMMARY_BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
       - name: 💬 Comment on PR (if applicable)
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -343,7 +340,6 @@ jobs:
               repo: context.repo.repo,
               body: `${{ steps.summary.outputs.summary }}`
             });
-
       - name: 📬 Send notification (on failure)
         if: failure()
         run: |
