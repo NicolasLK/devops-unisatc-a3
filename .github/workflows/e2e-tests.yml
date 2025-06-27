@@ -96,7 +96,7 @@ jobs:
         run: pnpm test --reporter=list
         env:
           CI: true
-          STRAPI_URL: http://localhost:1337
+          STRAPI_URL: http://localhost:1330
 
       - name: 📊 Upload Test Results
         if: always()
