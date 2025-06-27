@@ -1,4 +1,3 @@
-# .github/workflows/main-deploy.yml
 # Workflow que constrói a imagem Docker e faz o deploy no GKE via Terraform.
 name: 🚀 CI/CD - Strapi A3
 
