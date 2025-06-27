@@ -47,13 +47,13 @@ jobs:
             ~/.cache/ms-playwright
 
       - name: 📥 Install Dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm instal --no-frozen-lockfile
 
       - name: 🔨 Rebuild better-sqlite3 bindings
         run: pnpm exec npm rebuild better-sqlite3
 
       - name: 🎭 Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
+        run: pnpm exec playwright instal --with-deps
 
       - name: 📁 Create Required Directories
         run: |
@@ -96,7 +96,7 @@ jobs:
         run: pnpm test --reporter=list
         env:
           CI: true
-          STRAPI_URL: http://localhost:1330
+          STRAPI_URL: http://localhost:1337
 
       - name: 📊 Upload Test Results
         if: always()
